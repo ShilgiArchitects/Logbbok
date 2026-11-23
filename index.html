@@ -192,7 +192,7 @@ tfoot td{font-weight:700;background:var(--bg)}
 </head>
 <body>
 <header class="top"><div class="wrap">
-  <div class="brand"><h1>לוגבוק טיסות</h1><small>גרסה 1.5 · 23.11.2026</small></div>
+  <div class="brand"><h1>לוגבוק טיסות</h1><small>גרסה 1.6 · 23.11.2026</small></div>
   <button type="button" class="status" id="status" data-s="loading">טוען…</button>
 </div></header>
 <nav class="tabs" aria-label="תפריט"><div class="wrap">
@@ -1664,7 +1664,7 @@ function updateStatus(){
   else if (!META.owner){ s = 'local'; t = 'נשמר במכשיר בלבד · התחבר ל-Google Drive'; }
   else if (!navigator.onLine){ s = 'local'; t = META.dirty ? 'אין אינטרנט · השינויים יסונכרנו אחר כך' : 'אין אינטרנט · עובד מהמכשיר'; }
   else if (lastSyncErr){ s = 'error'; t = lastSyncErr; }
-  else if (!hasToken()){ s = META.dirty ? 'local' : 'db'; t = META.dirty ? 'יש שינויים שלא סונכרנו · לחץ לסנכרון' : 'לחץ לסנכרון עם Google Drive'; }
+  else if (!hasToken()){ s = META.dirty ? 'local' : 'db'; t = META.dirty ? 'יש שינויים שלא סונכרנו · יסונכרנו בלחיצה הבאה' : 'יסונכרן אוטומטית בלחיצה הבאה'; }
   else if (META.dirty){ s = 'loading'; t = 'ממתין לסנכרון…'; }
   else { s = 'db'; t = 'מסונכרן עם Google Drive'; }
   el.dataset.s = s; el.textContent = t;
@@ -1676,6 +1676,17 @@ $('#status').addEventListener('click', () => {
   if (hasToken()) syncNow(); else connectGoogle(false);
 });
 $('#bannerConnect').addEventListener('click', () => connectGoogle(false));
+/* Automatic sync: Google only opens its sign-in window in answer to a click, so the first click
+   anywhere in the app (and the first one after the session nears its one-hour end) renews it. */
+let lastAutoAuth = 0;
+document.addEventListener('pointerdown', e => {
+  if (!META.owner || !configured() || !gisReady() || !navigator.onLine || pendingAuth) return;
+  if (hasToken() && tokenExp - Date.now() > 5 * 60 * 1000) return;
+  if (Date.now() - lastAutoAuth < 60 * 1000) return;
+  if (e.target.closest('#status, #bannerConnect, #sy-connect, #sy-switch, #sy-out, #clock, #modal')) return;
+  lastAutoAuth = Date.now();
+  requestToken(false).then(() => { sessionEmail = ''; syncNow(); }).catch(() => updateStatus());
+}, true);
 function renderSync(){
   const acct = $('#sy-acct'), info = $('#sy-info');
   if (!configured()){
