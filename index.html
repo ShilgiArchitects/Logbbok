@@ -16,8 +16,10 @@
 <style>
 /* Layout: header with sync status, tab bar, one working view at a time; logbook table mirrors the numbered columns of the paper logbook */
 :root{
-  --bg:#eaeef2;
-  --surface:#ffffff;
+  --bg:#dfe8ef;
+  --surface:rgba(255,255,255,.78);
+  --solid:#ffffff;
+  --plane-opacity:.95;
   --ink:#13212f;
   --muted:#5a6878;
   --line:#d3dae2;
@@ -34,7 +36,7 @@
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    --bg:#0e151d; --surface:#16202b; --ink:#e4eaf1; --muted:#93a1b1; --line:#2a3846;
+    --bg:#0e151d; --surface:rgba(22,32,43,.9); --solid:#16202b; --plane-opacity:.1; --ink:#e4eaf1; --muted:#93a1b1; --line:#2a3846;
     --accent:#5aa6ee; --accent-ink:#06121f; --accent-soft:#1b3550; --signal:#e8b23a;
     --ok:#5cc58c; --warn:#e6a84a; --bad:#f08077;
     --ok-soft:#163626; --warn-soft:#3b2a0f; --bad-soft:#3d1916;
@@ -42,7 +44,7 @@
   }
 }
 :root[data-theme="dark"]{
-  --bg:#0e151d; --surface:#16202b; --ink:#e4eaf1; --muted:#93a1b1; --line:#2a3846;
+  --bg:#0e151d; --surface:rgba(22,32,43,.9); --solid:#16202b; --plane-opacity:.1; --ink:#e4eaf1; --muted:#93a1b1; --line:#2a3846;
   --accent:#5aa6ee; --accent-ink:#06121f; --accent-soft:#1b3550; --signal:#e8b23a;
   --ok:#5cc58c; --warn:#e6a84a; --bad:#f08077;
   --ok-soft:#163626; --warn-soft:#3b2a0f; --bad-soft:#3d1916;
@@ -50,6 +52,9 @@
 }
 *{box-sizing:border-box}
 [hidden]{display:none !important}
+body::before{content:"";position:fixed;inset:0;background:url("bg-plane.png") center 58%/min(1150px,92vw) auto no-repeat;opacity:var(--plane-opacity);pointer-events:none;z-index:0}
+header.top,nav.tabs,main{position:relative;z-index:1}
+.wrap{max-width:1400px;margin:0 auto;padding:0 20px}
 html,body{margin:0}
 body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:16px;line-height:1.5}
 h1,h2,h3{font-family:var(--font-display);font-weight:400;text-wrap:balance;margin:0}
@@ -57,7 +62,8 @@ h1{font-size:1.5rem}
 h2{font-size:1.25rem}
 h3{font-size:1.05rem}
 .num,.mono{font-family:var(--font-num);font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:isolate}
-header.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 16px;padding:14px 20px;background:var(--surface);border-bottom:1px solid var(--line)}
+header.top{background:var(--surface);border-bottom:1px solid var(--line)}
+header.top .wrap{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 16px;padding-top:14px;padding-bottom:14px}
 .brand{display:flex;align-items:baseline;gap:10px}
 .brand small{color:var(--muted);font-size:.85rem}
 .status{font:inherit;font-size:.85rem;border:0;cursor:pointer;padding:4px 10px;border-radius:999px;background:var(--accent-soft);color:var(--ink);display:inline-flex;align-items:center;gap:6px}
@@ -67,11 +73,18 @@ header.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-
 .status[data-s="local"]::before{background:var(--warn)}
 .status[data-s="error"]{background:var(--bad-soft)}
 .status[data-s="error"]::before{background:var(--bad)}
-nav.tabs{display:flex;gap:4px;padding:0 16px;background:var(--surface);border-bottom:1px solid var(--line);overflow-x:auto}
-nav.tabs a{padding:12px 14px;color:var(--muted);text-decoration:none;font-weight:600;border-bottom:3px solid transparent;white-space:nowrap}
-nav.tabs a[aria-current="page"]{color:var(--accent);border-bottom-color:var(--accent)}
-nav.tabs a:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
-main{padding:20px;max-width:1400px;margin:0 auto;display:grid;gap:16px}
+nav.tabs .wrap{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;padding-top:16px}
+nav.tabs a{display:flex;align-items:center;justify-content:center;text-align:center;min-height:54px;padding:10px 12px;background:var(--surface);border:1px solid var(--line);border-radius:10px;color:var(--ink);font-weight:700;font-size:1.05rem;text-decoration:none}
+nav.tabs a:hover{border-color:var(--accent)}
+nav.tabs a[aria-current="page"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+nav.tabs a:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+@media (max-width:760px){nav.tabs .wrap{grid-template-columns:repeat(3,minmax(0,1fr))} nav.tabs a{min-height:46px;font-size:.95rem}}
+main{padding:16px 20px 28px;max-width:1400px;margin:0 auto;display:grid;gap:16px}
+.filterbtn{gap:8px}
+.filterbtn svg{width:18px;height:18px}
+.filterbtn[aria-expanded="true"],.filterbtn.on{border-color:var(--accent);color:var(--accent)}
+.filterpanel{display:grid;gap:12px;padding:12px;border:1px dashed var(--line);border-radius:8px}
+.fltnote{font-size:.85rem;color:var(--muted)}
 section.view{display:none;gap:16px}
 section.view.active{display:grid}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;display:grid;gap:12px}
@@ -107,6 +120,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
 button.viaadd .plus{font-family:var(--font-num);font-size:1.15rem;line-height:1;color:var(--accent)}
 .pilotbar{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;padding:10px 14px;background:var(--surface);border:1px solid var(--line);border-inline-start:4px solid var(--accent);border-radius:10px;font-size:.92rem}
 .pilotbar strong{font-size:1.02rem}
+.card .tablewrap{background:transparent}
 .tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
 table{border-collapse:collapse;width:100%;font-size:.88rem}
 th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:center;vertical-align:middle}
@@ -142,7 +156,7 @@ tfoot td{font-weight:700;background:var(--bg)}
 .timefield{cursor:pointer;direction:ltr;text-align:right;font-family:var(--font-num)}
 #clock{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;padding:16px;z-index:40}
 #clock.show{display:flex}
-#clock .box{background:var(--surface);border-radius:22px;width:310px;max-width:100%;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.3);direction:ltr}
+#clock .box{background:var(--solid);border-radius:22px;width:310px;max-width:100%;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.3);direction:ltr}
 #clock .head{background:var(--accent);color:var(--accent-ink);display:flex;justify-content:center;align-items:baseline;gap:2px;padding:18px 0 14px;font-family:var(--font-num);font-size:3.2rem;line-height:1}
 #clock .head button{all:unset;cursor:pointer;opacity:.6;padding:0 4px;border-radius:8px}
 #clock .head button.on{opacity:1}
@@ -164,7 +178,7 @@ tfoot td{font-weight:700;background:var(--bg)}
 #clock .foot .sp{flex:1}
 #clock .foot button{border:0;background:none;color:var(--accent);font-weight:700;padding:8px 10px}
 #clock .foot button.icon{color:var(--muted);font-size:1.2rem}
-#modal .box{background:var(--surface);border-radius:12px;padding:18px;max-width:420px;width:100%;display:grid;gap:14px}
+#modal .box{background:var(--solid);border-radius:12px;padding:18px;max-width:420px;width:100%;display:grid;gap:14px}
 .map-table td,.map-table th{text-align:right}
 .map-table select{min-width:180px}
 .preview td{font-size:.8rem;white-space:nowrap}
@@ -177,32 +191,35 @@ tfoot td{font-weight:700;background:var(--bg)}
 </style>
 </head>
 <body>
-<header class="top">
-  <div class="brand"><h1>לוגבוק טיסות</h1><small>גרסה 1.4 · 23.11.2026</small></div>
+<header class="top"><div class="wrap">
+  <div class="brand"><h1>לוגבוק טיסות</h1><small>גרסה 1.5 · 23.11.2026</small></div>
   <button type="button" class="status" id="status" data-s="loading">טוען…</button>
-</header>
-<nav class="tabs" aria-label="תפריט">
+</div></header>
+<nav class="tabs" aria-label="תפריט"><div class="wrap">
   <a href="#logbook" data-v="logbook">יומן טיסות</a>
   <a href="#new" data-v="new" id="tab-new">טיסה חדשה</a>
   <a href="#aircraft" data-v="aircraft">ספריית כלי טיס</a>
   <a href="#reminders" data-v="reminders">תזכורות</a>
   <a href="#data" data-v="data">ייבוא וייצוא</a>
   <a href="#settings" data-v="settings">הגדרות</a>
-</nav>
+</div></nav>
 <main>
   <div id="localBanner" class="banner row" hidden style="justify-content:space-between"><span>הנתונים נשמרים כרגע רק במכשיר הזה. התחבר ל-Google Drive כדי לשמור אותם בחשבון שלך ולסנכרן בין מחשב לטלפון.</span><button type="button" class="primary small" id="bannerConnect">התחבר ל-Google Drive</button></div>
 
   <!-- LOGBOOK -->
   <section class="view" id="v-logbook">
     <div class="pilotbar" id="pilotBar"></div>
-    <div class="tiles" id="tiles"></div>
     <div class="card">
-      <h2>סיכום נחיתות</h2>
-      <div class="tablewrap" id="ldgSummary"></div>
-    </div>
-    <div class="card">
-      <div class="row" style="justify-content:space-between">
-        <h2>סינון</h2>
+      <div class="row" style="justify-content:space-between;align-items:center">
+        <h2>סיכום טיסות</h2>
+        <div class="row" style="gap:8px;align-items:center">
+          <span class="fltnote" id="fltNote"></span>
+          <button type="button" class="small" id="filterClear" hidden>נקה סינון</button>
+          <button type="button" class="filterbtn" id="filterToggle" aria-expanded="false" aria-controls="filterPanel" title="סינון לפי תקופה, כלי טיס ועוד">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8.5V19l-4 2v-7.5z"/></svg><span>סינון</span></button>
+        </div>
+      </div>
+      <div class="filterpanel" id="filterPanel" hidden>
         <div class="row" style="gap:6px">
           <button class="small" data-preset="90">90 יום אחרונים</button>
           <button class="small" data-preset="year">השנה</button>
@@ -210,8 +227,7 @@ tfoot td{font-weight:700;background:var(--bg)}
           <button class="small" data-preset="all">הכול</button>
           <button class="small danger" id="bulkDel" type="button" hidden></button>
         </div>
-      </div>
-      <div class="grid">
+        <div class="grid">
         <div class="field"><label for="f-from">מתאריך</label><input type="date" id="f-from"></div>
         <div class="field"><label for="f-to">עד תאריך</label><input type="date" id="f-to"></div>
         <div class="field"><label for="f-cat">סוג כלי טיס</label><select id="f-cat"></select></div>
@@ -222,6 +238,13 @@ tfoot td{font-weight:700;background:var(--bg)}
           <option value="">הכול</option><option value="night">עם זמן לילה</option><option value="ifr">עם זמן IFR</option></select></div>
         <div class="field"><label for="f-q">חיפוש חופשי</label><input type="search" id="f-q" placeholder="שדה, שם, הערה…"></div>
       </div>
+      </div>
+      <div class="tablewrap" id="fltSummary"></div>
+      <span class="fltnote" id="lastFlight"></span>
+    </div>
+    <div class="card">
+      <h2>סיכום נחיתות</h2>
+      <div class="tablewrap" id="ldgSummary"></div>
     </div>
     <div class="tablewrap" id="tableWrap"></div>
     <p class="note">לחיצה על שורה פותחת את הטיסה לעריכה. זמני הטיסה בשעות עשרוניות (1.4 = שעה ו-24 דקות), ושעות ההמראה והנחיתה לפי זמן מקומי.</p>
@@ -445,7 +468,7 @@ tfoot td{font-weight:700;background:var(--bg)}
   </section>
 </main>
 
-<div id="modal" role="dialog" aria-modal="true" aria-labelledby="modalText"><div class="box"><p id="modalText" style="margin:0"></p><div class="row"><button class="primary" id="modalOk">אישור</button><button id="modalCancel">ביטול</button></div></div></div>
+<div id="modal" role="dialog" aria-modal="true" aria-labelledby="modalText"><div class="box"><p id="modalText" style="margin:0"></p><div class="field" id="modalTypeWrap" hidden><label for="modalType" id="modalTypeLabel"></label><input id="modalType" inputmode="numeric" autocomplete="off" class="mono"></div><div class="row"><button class="primary" id="modalOk">אישור</button><button id="modalCancel">ביטול</button></div></div></div>
 <div id="clock" role="dialog" aria-modal="true" aria-label="בחירת שעה"><div class="box">
   <div class="head"><button type="button" id="ck-h" class="on" aria-label="שעות">07</button><span>:</span><button type="button" id="ck-m" aria-label="דקות">00</button></div>
   <div class="dialwrap"><svg id="ck-dial" viewBox="0 0 256 256" aria-hidden="true"></svg></div>
@@ -594,12 +617,17 @@ function toast(msg, ms){
   const t = $('#toast'); t.textContent = msg; t.classList.add('show');
   clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), ms || 3200);
 }
-function confirmBox(text, okLabel){
+/** Confirmation dialog. With typeExpect, OK stays disabled until that exact text is typed. */
+function confirmBox(text, okLabel, typeExpect){
   return new Promise(res => {
-    const m = $('#modal'); $('#modalText').textContent = text; $('#modalOk').textContent = okLabel || 'אישור';
-    m.classList.add('show'); $('#modalOk').focus();
-    const done = v => { m.classList.remove('show'); $('#modalOk').onclick = $('#modalCancel').onclick = null; res(v); };
-    $('#modalOk').onclick = () => done(true); $('#modalCancel').onclick = () => done(false);
+    const m = $('#modal'), ok = $('#modalOk'), inp = $('#modalType');
+    $('#modalText').textContent = text; ok.textContent = okLabel || 'אישור';
+    $('#modalTypeWrap').hidden = !typeExpect; inp.value = ''; ok.disabled = !!typeExpect;
+    if (typeExpect) $('#modalTypeLabel').textContent = `לאישור, הקלד ${typeExpect}`;
+    inp.oninput = () => { ok.disabled = inp.value.trim() !== String(typeExpect); };
+    m.classList.add('show'); (typeExpect ? inp : $('#modalCancel')).focus();
+    const done = v => { m.classList.remove('show'); ok.onclick = $('#modalCancel').onclick = inp.oninput = null; ok.disabled = false; res(v); };
+    ok.onclick = () => done(true); $('#modalCancel').onclick = () => done(false);
   });
 }
 
@@ -938,17 +966,27 @@ function renderLogbook(){
   const list = filtered();
   const bd = $('#bulkDel');
   bd.hidden = !list.length;
+  const on = Object.values(F).some(Boolean);
+  $('#filterToggle').classList.toggle('on', on); $('#filterClear').hidden = !on;
+  $('#fltNote').textContent = on ? 'סינון פעיל · ' + list.length + ' טיסות' : '';
   bd.textContent = Object.values(F).some(Boolean) ? `מחק ${list.length} טיסות מסוננות` : `מחק את כל ${list.length} הטיסות`;
   const since90 = addDaysISO(todayISO(), -90);
   const recent = S.flights.filter(f => f.date >= since90);
   const last = S.flights.reduce((m, f) => f.date > m ? f.date : m, '');
   const isFiltered = Object.values(F).some(Boolean);
-  $('#tiles').innerHTML = [
-    ['סה"כ זמן טיסה', fmtDur(sum(list, 'total'), true), isFiltered ? 'לפי הסינון' : 'כל הטיסות'],
-    ['טיסות', list.length, isFiltered ? 'לפי הסינון' : 'כל הטיסות'],
-    ['זמן PIC', fmtDur(sum(list, 'pic'), true), 'עמודה 11'],
-    ['טיסה אחרונה', last ? fmtDateHe(last) : '—', last ? 'לפני ' + (-daysUntil(last)) + ' ימים' : 'אין עדיין'],
-  ].map(([k, v, s]) => `<div class="tile"><span class="k">${esc(k)}</span><span class="v">${esc(v)}</span><span class="s">${esc(s)}</span></div>`).join('');
+  $('#lastFlight').textContent = last ? `טיסה אחרונה: ${fmtDateHe(last)} (לפני ${-daysUntil(last)} ימים)` : '';
+  const fRow = (label, sub, fl) => `<tr><td class="txt">${esc(label)}<span class="sub">${esc(sub)}</span></td><td class="num">${fl.length}</td>
+    <td class="num"><strong>${fmtDur(sum(fl, 'total'), true)}</strong></td><td class="num">${fmtDur(sum(fl, 'pic'), true)}</td><td class="num">${fmtDur(sum(fl, 'dual'), true)}</td>
+    <td class="num">${fmtDur(sum(fl, 'night'), true)}</td><td class="num">${fmtDur(sum(fl, 'ifr'), true)}</td></tr>`;
+  const ys = todayISO().slice(0, 4) + '-01-01';
+  $('#fltSummary').innerHTML = `<table class="ldg">
+    <thead><tr><th class="txt">תקופה</th><th>טיסות</th><th>זמן כולל</th><th>PIC</th><th>בהדרכה</th><th>לילה</th><th>IFR</th></tr></thead>
+    <tbody>
+      ${isFiltered ? fRow('לפי הסינון', '', list) : ''}
+      ${fRow('90 הימים האחרונים', 'מ-' + fmtDateHe(since90), recent)}
+      ${fRow('השנה', 'מ-' + fmtDateHe(ys), S.flights.filter(f => f.date >= ys))}
+      ${fRow('כל הלוגבוק', '', S.flights)}
+    </tbody></table>`;
 
   const ldgRow = (label, sub, fl) => {
     const d = sum(fl, 'ldgD'), n = sum(fl, 'ldgN');
@@ -1526,11 +1564,18 @@ async function doImport(){
 }
 
 /* ----- bulk delete and import history ----- */
+$('#filterToggle').addEventListener('click', () => {
+  const p = $('#filterPanel'); p.hidden = !p.hidden;
+  $('#filterToggle').setAttribute('aria-expanded', String(!p.hidden));
+  if (!p.hidden) $('#f-from').focus();
+});
+$('#filterClear').addEventListener('click', () => { for (const k of Object.keys(F)) F[k] = ''; saveFilter(); renderFilterOptions(); renderLogbook(); });
 $('#bulkDel').addEventListener('click', async () => {
   const list = filtered(); if (!list.length) return;
   const ids = new Set(list.map(f => f.id));
   const filteredNow = Object.values(F).some(Boolean);
   if (!await confirmBox(`למחוק ${list.length} טיסות${filteredNow ? ' שמתאימות לסינון הנוכחי' : ', כלומר את כל הלוגבוק'}? המחיקה תסתנכרן גם ל-Google Drive, ואי אפשר לבטל אותה. כדאי לשמור קודם קובץ גיבוי.`, 'מחק')) return;
+  if (list.length > 1 && !await confirmBox(`אישור נוסף: למחוק לצמיתות ${list.length} טיסות?`, 'כן, מחק')) return;
   S.flights = S.flights.filter(f => !ids.has(f.id));
   persist(); toast(`נמחקו ${ids.size} טיסות`); render();
 });
@@ -1549,6 +1594,7 @@ $('#impList').addEventListener('click', async e => {
   const id = b.dataset.delimp;
   const n = S.flights.filter(f => f.imp === id).length;
   if (!await confirmBox(`למחוק ${n} טיסות שהגיעו מהייבוא הזה? טיסות שהוספת ידנית לא יימחקו.`, 'מחק')) return;
+  if (n > 1 && !await confirmBox(`אישור נוסף: למחוק לצמיתות ${n} טיסות?`, 'כן, מחק')) return;
   S.flights = S.flights.filter(f => f.imp !== id);
   const used = new Set(S.flights.map(f => f.acId));
   S.aircraft = S.aircraft.filter(a => a.imp !== id || used.has(a.id));
