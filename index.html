@@ -490,7 +490,8 @@ function fmtDur(min, zero){
   return (min / 60).toFixed(1);
 }
 function hhmm(v){
-  const m = String(v || '').match(/(\d{1,2}):(\d{2})/);
+  const s = String(v || '').trim();
+  const m = s.match(/(\d{1,2}):(\d{2})/) || s.match(/^(\d{1,2})(\d{2})$/);
   if (!m || +m[1] > 23 || +m[2] > 59) return '';
   return String(+m[1]).padStart(2, '0') + ':' + m[2];
 }
@@ -1368,8 +1369,10 @@ const IMPORT_FIELDS = [
   {k:'tIn', label:'שעת נחיתה', g:['flight stop time', 'stop time', 'end time', 'time in', 'in', 'on', 'landing time', 'arrival time']},
   {k:'total', label:'זמן טיסה כולל', req:true, g:['duration', 'total time', 'total flight time', 'total']},
   {k:'pic', label:'זמן PIC', g:['pic', 'pic time']},
+  {k:'pic2', label:'זמן PIC – עמודה נוספת (מתווספת)', g:['pilot in command']},
   {k:'cop', label:'זמן טייס משנה (SIC)', g:['sic', 'sic time', 'co-pilot', 'copilot']},
   {k:'dual', label:'זמן בהדרכה (Dual)', g:['dual received', 'dual']},
+  {k:'dual2', label:'זמן בהדרכה – עמודה נוספת (מתווספת)', g:['student']},
   {k:'instr', label:'זמן מדריך', g:['dual given', 'cfi', 'instructor']},
   {k:'night', label:'זמן לילה', g:['night', 'night time']},
   {k:'ifr', label:'זמן IFR / מכשירים', g:['actual instrument', 'instrument', 'ifr', 'imc']},
@@ -1396,12 +1399,37 @@ function guessMapping(headers){
   return map;
 }
 let CSV = null;
+/** Pilot Pro exports a title line, an |Aircraft| table and a |Logbook| table. Other files: the header row is the first row naming a date column. */
+function splitSections(rows){
+  const isMarker = r => /^\|.+\|$/.test((r[0] || '').trim());
+  const low = r => r.map(c => String(c).trim().toLowerCase());
+  let hi = rows.findIndex(r => r.length >= 4 && low(r).some(c => /(^|\s)date(\s|$|\()/.test(c)) && !low(r).includes('aircraft registration') || (r.length >= 4 && low(r)[0].startsWith('flight date')));
+  if (hi < 0) hi = 0;
+  const data = [];
+  for (let i = hi + 1; i < rows.length; i++){ if (isMarker(rows[i])) break; data.push(rows[i]); }
+  const aircraft = new Map();
+  const ai = rows.findIndex((r, i) => i !== hi && low(r).includes('aircraft registration') && low(r).some(c => c.includes('make') || c.startsWith('category')));
+  if (ai >= 0){
+    const ah = low(rows[ai]);
+    const iReg = ah.indexOf('aircraft registration'), iCat = ah.findIndex(c => c.startsWith('category')), iMake = ah.findIndex(c => c.includes('make')), iAct = ah.indexOf('active');
+    for (let i = ai + 1; i < rows.length && !isMarker(rows[i]); i++){
+      const r = rows[i], reg = String(r[iReg] || '').trim().toUpperCase();
+      if (!reg) continue;
+      const info = {cat: iCat >= 0 ? String(r[iCat] || '').trim() : '', make: iMake >= 0 ? String(r[iMake] || '').trim() : '', active: iAct >= 0 && /yes/i.test(r[iAct] || '')};
+      const prev = aircraft.get(reg);
+      if (!prev || info.active || !prev.active) aircraft.set(reg, info);
+    }
+  }
+  return {headers: rows[hi] || [], rows: data, aircraft};
+}
 $('#csvFile').addEventListener('change', async e => {
   const file = e.target.files[0]; if (!file) return;
   const text = await file.text();
   const rows = parseCSV(text);
   if (rows.length < 2){ $('#mapArea').innerHTML = '<div class="banner">לא נמצאו שורות נתונים בקובץ.</div>'; CSV = null; return; }
-  CSV = {headers: rows[0], rows: rows.slice(1), map: guessMapping(rows[0]), fileName: file.name};
+  const sec = splitSections(rows);
+  if (!sec.rows.length){ $('#mapArea').innerHTML = '<div class="banner">לא נמצאו שורות טיסה בקובץ.</div>'; CSV = null; return; }
+  CSV = {headers: sec.headers, rows: sec.rows, map: guessMapping(sec.headers), fileName: file.name, acInfo: sec.aircraft};
   renderMapping();
 });
 $('#csvDateFmt').addEventListener('change', () => { if (CSV) renderMapping(); });
@@ -1412,7 +1440,8 @@ function buildImport(){
     const head = CSV.map.date != null ? String(CSV.headers[CSV.map.date] || '').toLowerCase() : '';
     fmt = /mm\W?dd/.test(head) ? 'MDY' : /dd\W?mm/.test(head) ? 'DMY' : detectDateFmt(CSV.rows.map(r => colVal(r, 'date')));
   }
-  const existing = new Set(S.flights.map(dupKey));
+  const existing = new Map();
+  for (const f of S.flights){ const k = dupKey(f); existing.set(k, (existing.get(k) || 0) + 1); }
   const acByReg = new Map(S.aircraft.map(a => [a.registration.toUpperCase(), a]));
   const newAc = [], flights = []; let bad = 0, dup = 0, badTime = 0;
   for (const r of CSV.rows){
@@ -1426,8 +1455,12 @@ function buildImport(){
     let a = reg ? acByReg.get(reg) : null;
     const catRaw = colVal(r, 'cat');
     if (!a && reg){
-      const t = colVal(r, 'acType');
-      a = {id: newId(), category: mapCat(catRaw || t), manufacturer: '', model: t, registration: reg, engine: /multi/i.test(catRaw) ? 'ME' : (mapCat(catRaw || t) === 'glider' ? 'NONE' : 'SE')};
+      const info = (CSV.acInfo && CSV.acInfo.get(reg)) || null;
+      const t = info && info.make ? info.make : colVal(r, 'acType');
+      const c = info && info.cat ? info.cat : catRaw;
+      const sp = t.indexOf(' ');
+      const man = info && info.make && sp > 0 ? t.slice(0, sp) : '', model = info && info.make && sp > 0 ? t.slice(sp + 1) : t;
+      a = {id: newId(), category: mapCat(c || t), manufacturer: man, model, registration: reg, engine: /multi/i.test(c) ? 'ME' : (mapCat(c || t) === 'glider' ? 'NONE' : 'SE')};
       acByReg.set(reg, a); newAc.push(a);
     }
     const multi = parseDur(colVal(r, 'multi'));
@@ -1439,13 +1472,13 @@ function buildImport(){
       spSE: 0, spME: 0, mp: multi,
       picName: colVal(r, 'picName'), ldgD: parseInt(colVal(r, 'ldgD')) || 0, ldgN: parseInt(colVal(r, 'ldgN')) || 0,
       night: parseDur(colVal(r, 'night')), ifr: parseDur(colVal(r, 'ifr')),
-      pic: parseDur(colVal(r, 'pic')), cop: parseDur(colVal(r, 'cop')), dual: parseDur(colVal(r, 'dual')), instr: parseDur(colVal(r, 'instr')),
+      pic: parseDur(colVal(r, 'pic')) + parseDur(colVal(r, 'pic2')), cop: parseDur(colVal(r, 'cop')), dual: parseDur(colVal(r, 'dual')) + parseDur(colVal(r, 'dual2')), instr: parseDur(colVal(r, 'instr')),
       remarks: [route ? 'מסלול: ' + route : '', colVal(r, 'remarks')].filter(Boolean).join(' · ')
     };
     if (!multi){ if (f.engine === 'ME') f.spME = total; else f.spSE = total; }
     const key = dupKey(f);
-    if (existing.has(key)){ dup++; continue; }
-    existing.add(key); flights.push(f);
+    if (existing.get(key) > 0){ existing.set(key, existing.get(key) - 1); dup++; continue; }
+    flights.push(f);
   }
   return {fmt, flights, newAc, bad, dup, badTime};
 }
