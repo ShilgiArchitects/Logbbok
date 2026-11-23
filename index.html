@@ -1,0 +1,1483 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>לוגבוק טיסות</title>
+<meta name="theme-color" content="#0d5ea6">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<script src="config.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;600;700&family=Secular+One&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* Layout: header with sync status, tab bar, one working view at a time; logbook table mirrors the numbered columns of the paper logbook */
+:root{
+  --bg:#eaeef2;
+  --surface:#ffffff;
+  --ink:#13212f;
+  --muted:#5a6878;
+  --line:#d3dae2;
+  --accent:#0d5ea6;
+  --accent-ink:#ffffff;
+  --accent-soft:#dbe8f5;
+  --signal:#c98a00;
+  --ok:#1d7447; --warn:#a96400; --bad:#b0281e;
+  --ok-soft:#dcf0e4; --warn-soft:#fbeccf; --bad-soft:#f8dcd9;
+  --font-display:"Secular One","Assistant",system-ui,sans-serif;
+  --font-body:"Assistant",system-ui,"Segoe UI",Arial,sans-serif;
+  --font-num:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0e151d; --surface:#16202b; --ink:#e4eaf1; --muted:#93a1b1; --line:#2a3846;
+    --accent:#5aa6ee; --accent-ink:#06121f; --accent-soft:#1b3550; --signal:#e8b23a;
+    --ok:#5cc58c; --warn:#e6a84a; --bad:#f08077;
+    --ok-soft:#163626; --warn-soft:#3b2a0f; --bad-soft:#3d1916;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e151d; --surface:#16202b; --ink:#e4eaf1; --muted:#93a1b1; --line:#2a3846;
+  --accent:#5aa6ee; --accent-ink:#06121f; --accent-soft:#1b3550; --signal:#e8b23a;
+  --ok:#5cc58c; --warn:#e6a84a; --bad:#f08077;
+  --ok-soft:#163626; --warn-soft:#3b2a0f; --bad-soft:#3d1916;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:16px;line-height:1.5}
+h1,h2,h3{font-family:var(--font-display);font-weight:400;text-wrap:balance;margin:0}
+h1{font-size:1.5rem}
+h2{font-size:1.25rem}
+h3{font-size:1.05rem}
+.num,.mono{font-family:var(--font-num);font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:isolate}
+header.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 16px;padding:14px 20px;background:var(--surface);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:baseline;gap:10px}
+.brand small{color:var(--muted);font-size:.85rem}
+.status{font:inherit;font-size:.85rem;border:0;cursor:pointer;padding:4px 10px;border-radius:999px;background:var(--accent-soft);color:var(--ink);display:inline-flex;align-items:center;gap:6px}
+.status::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.status[data-s="db"]::before{background:var(--ok)}
+.status[data-s="local"]{background:var(--warn-soft)}
+.status[data-s="local"]::before{background:var(--warn)}
+.status[data-s="error"]{background:var(--bad-soft)}
+.status[data-s="error"]::before{background:var(--bad)}
+nav.tabs{display:flex;gap:4px;padding:0 16px;background:var(--surface);border-bottom:1px solid var(--line);overflow-x:auto}
+nav.tabs a{padding:12px 14px;color:var(--muted);text-decoration:none;font-weight:600;border-bottom:3px solid transparent;white-space:nowrap}
+nav.tabs a[aria-current="page"]{color:var(--accent);border-bottom-color:var(--accent)}
+nav.tabs a:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+main{padding:20px;max-width:1400px;margin:0 auto;display:grid;gap:16px}
+section.view{display:none;gap:16px}
+section.view.active{display:grid}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;display:grid;gap:12px}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(170px,1fr))}
+.field{display:grid;gap:4px;min-width:0}
+.field label{font-size:.85rem;color:var(--muted);font-weight:600}
+.field .hint{font-size:.78rem;color:var(--muted)}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:8px 10px;min-width:0;width:100%}
+textarea{min-height:70px;resize:vertical}
+input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible,a.btn:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+input.ltr{direction:ltr;text-align:right}
+fieldset{border:1px solid var(--line);border-radius:8px;padding:12px;margin:0;display:grid;gap:12px}
+legend{padding:0 6px;font-weight:700;font-size:.92rem}
+legend .colno{font-family:var(--font-num);color:var(--signal);font-size:.8rem;margin-inline-start:6px}
+button,a.btn{font:inherit;font-weight:600;border-radius:7px;padding:8px 14px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+button:hover,a.btn:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+button.danger{color:var(--bad);border-color:var(--bad)}
+button.small,a.btn.small{padding:4px 10px;font-size:.85rem}
+button:disabled{opacity:.5;cursor:not-allowed}
+.tiles{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:grid;gap:2px}
+.tile .k{font-size:.8rem;color:var(--muted);font-weight:600}
+.tile .v{font-family:var(--font-num);font-size:1.45rem;font-weight:600;direction:ltr;text-align:right}
+.tile .s{font-size:.78rem;color:var(--muted)}
+#fl-dep,#fl-arr,.viarow input{text-transform:uppercase}
+.via{display:grid;gap:8px}
+.via:empty{display:none}
+.viarow{display:flex;gap:8px;align-items:flex-end;padding-inline-start:14px;border-inline-start:2px dashed var(--line)}
+.viarow .field{flex:0 1 260px}
+.viarow button{padding:8px 12px}
+button.viaadd .plus{font-family:var(--font-num);font-size:1.15rem;line-height:1;color:var(--accent)}
+.pilotbar{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;padding:10px 14px;background:var(--surface);border:1px solid var(--line);border-inline-start:4px solid var(--accent);border-radius:10px;font-size:.92rem}
+.pilotbar strong{font-size:1.02rem}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:.88rem}
+th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:center;vertical-align:middle}
+thead th{background:var(--accent-soft);font-weight:700;position:sticky;top:0}
+thead tr.colnos th{font-family:var(--font-num);font-size:.72rem;color:var(--signal);background:var(--surface);font-weight:600}
+th.grp{border-inline-start:1px solid var(--line)}
+td.txt,th.txt{text-align:right}
+#tableWrap tbody tr{cursor:pointer}
+#tableWrap tbody tr:hover{background:var(--accent-soft)}
+table.ldg{font-size:.95rem}
+table.ldg td.num{font-size:1.05rem}
+table.ldg tbody tr:last-child td{border-bottom:0}
+tfoot td{font-weight:700;background:var(--bg)}
+.sub{color:var(--muted);font-size:.8rem;display:block}
+.empty{padding:28px;text-align:center;color:var(--muted)}
+.chip{display:inline-block;padding:2px 9px;border-radius:999px;font-size:.8rem;font-weight:700}
+.chip.ok{background:var(--ok-soft);color:var(--ok)}
+.chip.warn{background:var(--warn-soft);color:var(--warn)}
+.chip.bad{background:var(--bad-soft);color:var(--bad)}
+.chip.mute{background:var(--bg);color:var(--muted)}
+.note{font-size:.85rem;color:var(--muted)}
+.banner{padding:10px 14px;border-radius:8px;background:var(--warn-soft);color:var(--ink);font-size:.9rem}
+.banner.info{background:var(--accent-soft)}
+.list{display:grid;gap:8px}
+.item{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+.item .meta{display:grid;gap:2px}
+.item .acts{display:flex;gap:6px;flex-wrap:wrap}
+#toast{position:fixed;bottom:18px;inset-inline-start:50%;transform:translateX(50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;font-weight:600;opacity:0;pointer-events:none;transition:opacity .2s;max-width:90vw;z-index:20}
+#toast.show{opacity:1}
+#modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;padding:16px;z-index:30}
+#modal.show{display:flex}
+#modal .box{background:var(--surface);border-radius:12px;padding:18px;max-width:420px;width:100%;display:grid;gap:14px}
+.map-table td,.map-table th{text-align:right}
+.map-table select{min-width:180px}
+.preview td{font-size:.8rem;white-space:nowrap}
+@media (max-width:600px){
+  main{padding:12px}
+  header.top{padding:12px}
+  .tile .v{font-size:1.2rem}
+}
+@media (prefers-reduced-motion: reduce){ #toast{transition:none} }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><h1>לוגבוק טיסות</h1><small>גרסה 1.0</small></div>
+  <button type="button" class="status" id="status" data-s="loading">טוען…</button>
+</header>
+<nav class="tabs" aria-label="תפריט">
+  <a href="#logbook" data-v="logbook">יומן טיסות</a>
+  <a href="#new" data-v="new" id="tab-new">טיסה חדשה</a>
+  <a href="#aircraft" data-v="aircraft">ספריית כלי טיס</a>
+  <a href="#reminders" data-v="reminders">תזכורות</a>
+  <a href="#data" data-v="data">ייבוא וייצוא</a>
+  <a href="#settings" data-v="settings">הגדרות</a>
+</nav>
+<main>
+  <div id="localBanner" class="banner row" hidden style="justify-content:space-between"><span>הנתונים נשמרים כרגע רק במכשיר הזה. התחבר ל-Google Drive כדי לשמור אותם בחשבון שלך ולסנכרן בין מחשב לטלפון.</span><button type="button" class="primary small" id="bannerConnect">התחבר ל-Google Drive</button></div>
+
+  <!-- LOGBOOK -->
+  <section class="view" id="v-logbook">
+    <div class="pilotbar" id="pilotBar"></div>
+    <div class="tiles" id="tiles"></div>
+    <div class="card">
+      <h2>סיכום נחיתות</h2>
+      <div class="tablewrap" id="ldgSummary"></div>
+    </div>
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <h2>סינון</h2>
+        <div class="row" style="gap:6px">
+          <button class="small" data-preset="90">90 יום אחרונים</button>
+          <button class="small" data-preset="year">השנה</button>
+          <button class="small" data-preset="12m">12 חודשים</button>
+          <button class="small" data-preset="all">הכול</button>
+        </div>
+      </div>
+      <div class="grid">
+        <div class="field"><label for="f-from">מתאריך</label><input type="date" id="f-from"></div>
+        <div class="field"><label for="f-to">עד תאריך</label><input type="date" id="f-to"></div>
+        <div class="field"><label for="f-cat">סוג כלי טיס</label><select id="f-cat"></select></div>
+        <div class="field"><label for="f-ac">כלי טיס (רישום)</label><select id="f-ac"></select></div>
+        <div class="field"><label for="f-func">תפקיד</label><select id="f-func">
+          <option value="">הכול</option><option value="pic">טייס מפקד (PIC)</option><option value="cop">טייס משנה</option><option value="dual">בהדרכה (Dual)</option><option value="instr">מדריך</option></select></div>
+        <div class="field"><label for="f-cond">תנאי טיסה</label><select id="f-cond">
+          <option value="">הכול</option><option value="night">עם זמן לילה</option><option value="ifr">עם זמן IFR</option></select></div>
+        <div class="field"><label for="f-q">חיפוש חופשי</label><input type="search" id="f-q" placeholder="שדה, שם, הערה…"></div>
+      </div>
+    </div>
+    <div class="tablewrap" id="tableWrap"></div>
+    <p class="note">לחיצה על שורה פותחת את הטיסה לעריכה. זמני הטיסה בשעות עשרוניות (1.4 = שעה ו-24 דקות), ושעות ההמראה והנחיתה לפי זמן מקומי.</p>
+  </section>
+
+  <!-- NEW / EDIT FLIGHT -->
+  <section class="view" id="v-new">
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <h2 id="formTitle">טיסה חדשה</h2>
+        <span class="note">מספרי העמודות תואמים לספר הטיסות</span>
+      </div>
+      <div id="noAircraft" class="banner info" hidden>עדיין אין כלי טיס בספרייה. <a href="#aircraft">הוסף כלי טיס</a> כדי לרשום טיסה.</div>
+      <form id="flightForm" autocomplete="off">
+        <div style="display:grid;gap:14px">
+          <fieldset>
+            <legend>תאריך וכלי טיס <span class="colno">1 · 4</span></legend>
+            <div class="grid">
+              <div class="field"><label for="fl-date">תאריך</label><input type="date" id="fl-date" required></div>
+              <div class="field" style="grid-column:span 2"><label for="fl-ac">כלי טיס</label><select id="fl-ac" required></select><span class="hint" id="fl-ac-info"></span></div>
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend>המראה ונחיתה <span class="colno">2 · 3</span></legend>
+            <div class="grid">
+              <div class="field"><label for="fl-dep">מקום המראה</label><input id="fl-dep" class="ltr" placeholder="LLHZ" maxlength="12"></div>
+              <div class="field"><label for="fl-depT">שעת המראה (זמן מקומי, רשות)</label><input type="time" id="fl-depT"></div>
+            </div>
+            <div class="via" id="viaList"></div>
+            <div><button type="button" id="viaAdd" class="small viaadd"><span aria-hidden="true" class="plus">+</span> נחיתת ביניים</button></div>
+            <div class="grid">
+              <div class="field"><label for="fl-arr">מקום נחיתה</label><input id="fl-arr" class="ltr" placeholder="LLHA" maxlength="12"></div>
+              <div class="field"><label for="fl-arrT">שעת נחיתה (זמן מקומי, רשות)</label><input type="time" id="fl-arrT"></div>
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend>זמני טיסה <span class="colno">5 · 6 · 7</span></legend>
+            <div class="grid">
+              <div class="field"><label for="fl-total">זמן טיסה כולל (שעות)</label><select id="fl-total" class="mono"></select><span class="hint">השדות שלמטה יתמלאו לפיו, ואפשר לשנות אותם</span></div>
+              <div class="field"><label for="fl-mpchk">צוות</label><select id="fl-mpchk"><option value="sp">טייס יחיד</option><option value="mp">צוות רב-טייסים</option></select></div>
+              <div class="field"><label for="fl-spSE">טייס יחיד חד-מנועי</label><input id="fl-spSE" class="ltr mono"></div>
+              <div class="field"><label for="fl-spME">טייס יחיד רב-מנועי</label><input id="fl-spME" class="ltr mono"></div>
+              <div class="field"><label for="fl-mp">צוות רב-טייסים</label><input id="fl-mp" class="ltr mono"></div>
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend>טייס מפקד ונחיתות <span class="colno">8 · 9</span></legend>
+            <div class="grid">
+              <div class="field"><label for="fl-picName">שם טייס מפקד</label><input id="fl-picName" placeholder="SELF"></div>
+              <div class="field"><label for="fl-ldgD">נחיתות יום</label><input type="number" id="fl-ldgD" min="0" step="1" class="mono"></div>
+              <div class="field"><label for="fl-ldgN">נחיתות לילה</label><input type="number" id="fl-ldgN" min="0" step="1" class="mono"></div>
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend>תנאי הטסה <span class="colno">10</span></legend>
+            <div class="grid">
+              <div class="field"><label for="fl-night">זמן לילה</label><input id="fl-night" class="ltr mono"></div>
+              <div class="field"><label for="fl-ifr">זמן IFR</label><input id="fl-ifr" class="ltr mono"></div>
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend>זמן לפי תפקיד <span class="colno">11</span></legend>
+            <div class="grid">
+              <div class="field"><label for="fl-func">מילוי מהיר לפי תפקיד</label><select id="fl-func"><option value="pic">טייס מפקד (PIC)</option><option value="cop">טייס משנה</option><option value="dual">בהדרכה (Dual)</option><option value="instr">מדריך</option></select></div>
+              <div class="field"><label for="fl-pic">PIC</label><input id="fl-pic" class="ltr mono"></div>
+              <div class="field"><label for="fl-cop">טייס משנה</label><input id="fl-cop" class="ltr mono"></div>
+              <div class="field"><label for="fl-dual">בהדרכה</label><input id="fl-dual" class="ltr mono"></div>
+              <div class="field"><label for="fl-instr">מדריך</label><input id="fl-instr" class="ltr mono"></div>
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend>הערות ואישורים <span class="colno">13</span></legend>
+            <div class="field"><label for="fl-remarks">הערות</label><textarea id="fl-remarks"></textarea></div>
+          </fieldset>
+          <div class="row">
+            <button type="submit" class="primary" id="fl-save">שמור טיסה</button>
+            <button type="button" id="fl-cancel">ביטול</button>
+            <button type="button" class="danger" id="fl-delete" hidden>מחק טיסה</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- AIRCRAFT -->
+  <section class="view" id="v-aircraft">
+    <div class="card">
+      <h2 id="acFormTitle">הוספת כלי טיס</h2>
+      <form id="acForm" autocomplete="off">
+        <div class="grid">
+          <div class="field"><label for="ac-cat">סוג</label><select id="ac-cat"></select></div>
+          <div class="field"><label for="ac-man">יצרן</label><input id="ac-man" placeholder="Cessna"></div>
+          <div class="field"><label for="ac-model">דגם</label><input id="ac-model" placeholder="172S"></div>
+          <div class="field"><label for="ac-reg">רישום</label><input id="ac-reg" class="ltr" placeholder="4X-ABC" required></div>
+          <div class="field"><label for="ac-eng">מנועים</label><select id="ac-eng"><option value="SE">חד-מנועי</option><option value="ME">רב-מנועי</option><option value="NONE">ללא מנוע</option></select></div>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <button type="submit" class="primary" id="ac-save">הוסף לספרייה</button>
+          <button type="button" id="ac-cancel" hidden>ביטול עריכה</button>
+        </div>
+      </form>
+    </div>
+    <div class="card">
+      <h2>כלי הטיס שלי</h2>
+      <div class="list" id="acList"></div>
+    </div>
+  </section>
+
+  <!-- REMINDERS -->
+  <section class="view" id="v-reminders">
+    <div class="card">
+      <h2 id="remFormTitle">תזכורת חדשה</h2>
+      <form id="remForm" autocomplete="off">
+        <div class="grid">
+          <div class="field"><label for="rm-type">סוג</label><select id="rm-type">
+            <option value="license">תוקף רישיון / הגדר</option><option value="medical">תעודה רפואית</option><option value="check">בדיקת טיסה / ריענון</option><option value="aircraft">כלי טיס (ביטוח, טסט, אחזקה)</option><option value="other">אחר</option></select></div>
+          <div class="field" style="grid-column:span 2"><label for="rm-title">כותרת</label><input id="rm-title" required placeholder="חידוש תעודה רפואית Class 2"></div>
+          <div class="field"><label for="rm-date">מועד</label><input type="date" id="rm-date" required></div>
+          <div class="field"><label for="rm-lead">להזכיר לפני (ימים)</label><input type="number" id="rm-lead" min="0" step="1" value="30" class="mono"></div>
+        </div>
+        <div class="field" style="margin-top:12px"><label for="rm-notes">הערות</label><textarea id="rm-notes"></textarea></div>
+        <div class="row" style="margin-top:12px">
+          <button type="submit" class="primary" id="rm-save">שמור תזכורת</button>
+          <button type="button" id="rm-cancel" hidden>ביטול עריכה</button>
+        </div>
+      </form>
+    </div>
+    <div class="card">
+      <h2>התזכורות שלי</h2>
+      <p class="note">הכפתור "הוסף ליומן גוגל" פותח את Google Calendar עם אירוע מוכן, ואת השמירה שם מאשרים בעצמכם. זה חיבור חד-כיווני: שינוי ביומן גוגל לא יעודכן כאן.</p>
+      <div class="list" id="remList"></div>
+    </div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section class="view" id="v-settings">
+    <h2 style="font-size:1.4rem">הגדרות</h2>
+    <div class="card">
+      <h2>פרופיל טייס</h2>
+      <p class="note">הפרטים נשמרים באופן קבוע ומופיעים בראש היומן. השם לעמודה 8 ימולא אוטומטית בכל טיסה חדשה.</p>
+      <form id="pfForm" autocomplete="off">
+        <div style="display:grid;gap:14px">
+          <fieldset>
+            <legend>פרטים אישיים</legend>
+            <div class="grid">
+              <div class="field"><label for="pf-name">שם מלא</label><input id="pf-name"></div>
+              <div class="field"><label for="pf-nameEn">שם באנגלית</label><input id="pf-nameEn" class="ltr"></div>
+              <div class="field"><label for="pf-picName">שם לעמודה 8 (טייס מפקד)</label><input id="pf-picName" placeholder="SELF"><span class="hint">ברירת מחדל לכל טיסה חדשה</span></div>
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend>רישיון</legend>
+            <div class="grid">
+              <div class="field"><label for="pf-licType">סוג רישיון</label><select id="pf-licType">
+                <option value="">בחר…</option><option>טייס פרטי (PPL)</option><option>טייס פרטי מסוק (PPL(H))</option><option>טייס מסחרי (CPL)</option><option>טייס תובלה (ATPL)</option><option>טייס מז"מ</option><option>טייס דאון</option><option>אחר</option></select></div>
+              <div class="field"><label for="pf-licNo">מספר רישיון</label><input id="pf-licNo" class="ltr"></div>
+              <div class="field"><label for="pf-licIssued">תאריך הנפקה</label><input type="date" id="pf-licIssued"></div>
+              <div class="field"><label for="pf-licExp">תוקף רישיון</label><input type="date" id="pf-licExp"></div>
+              <div class="field" style="grid-column:span 2"><label for="pf-ratings">הגדרים</label><input id="pf-ratings" placeholder="למשל SEP, לילה, IR"></div>
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend>תעודה רפואית</legend>
+            <div class="grid">
+              <div class="field"><label for="pf-medClass">סוג</label><select id="pf-medClass"><option value="">בחר…</option><option>Class 1</option><option>Class 2</option><option>LAPL</option><option>אחר</option></select></div>
+              <div class="field"><label for="pf-medExp">בתוקף עד</label><input type="date" id="pf-medExp"></div>
+            </div>
+          </fieldset>
+          <div class="field"><label for="pf-notes">הערות</label><textarea id="pf-notes"></textarea></div>
+          <div class="row">
+            <button type="submit" class="primary">שמור פרופיל</button>
+            <button type="button" id="pf-rem">צור תזכורות לתוקף הרישיון והתעודה הרפואית</button>
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="card">
+      <h2>חשבון Google וסנכרון</h2>
+      <div class="item"><div class="meta"><strong id="sy-acct"></strong><span id="sy-info" class="note"></span></div>
+        <div class="acts"><button type="button" class="primary small" id="sy-connect">התחבר ל-Google Drive</button><button type="button" class="small" id="sy-now">סנכרן עכשיו</button><button type="button" class="small" id="sy-switch">החלף חשבון</button><button type="button" class="small" id="sy-out">התנתק</button></div></div>
+      <p class="note">הנתונים נשמרים קודם במכשיר, ומשם מסתנכרנים לתיקייה מוסתרת של האפליקציה ב-Google Drive שלך. רק לאפליקציה הזו יש גישה לתיקייה, ואין לה גישה לשאר הקבצים שלך. ב-Google Drive אפשר לראות את התיקייה תחת: הגדרות &gt; ניהול אפליקציות.</p>
+      <div class="row">
+        <button type="button" id="sy-export">שמור קובץ גיבוי במחשב</button>
+        <button type="button" class="danger" id="sy-wipe">מחק את הנתונים מהמכשיר הזה</button>
+        <span id="st-last" class="note"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- IMPORT / EXPORT -->
+  <section class="view" id="v-data">
+    <div class="card">
+      <h2>ייבוא טיסות מקובץ CSV (Pilot Pro)</h2>
+      <p class="note">ב-Pilot Pro מייצאים את הלוגבוק כקובץ CSV ובוחרים אותו כאן. אחר כך בודקים שכל עמודה בקובץ משויכת לשדה הנכון. כלי טיס שהרישום שלהם עוד לא בספרייה יתווספו אליה אוטומטית. טיסה שכבר קיימת (אותו תאריך, רישום, מוצא, יעד וזמן) לא תיובא שוב.</p>
+      <div class="row">
+        <div class="field"><label for="csvFile">קובץ CSV</label><input type="file" id="csvFile" accept=".csv,text/csv"></div>
+        <div class="field"><label for="csvDateFmt">פורמט תאריך בקובץ</label><select id="csvDateFmt"><option value="auto">זיהוי אוטומטי</option><option value="MDY">חודש/יום/שנה (MM/DD/YYYY)</option><option value="DMY">יום/חודש/שנה (DD/MM/YYYY)</option></select></div>
+      </div>
+      <div id="mapArea"></div>
+    </div>
+    <div class="card">
+      <h2>ייצוא וגיבוי</h2>
+      <div class="row">
+        <button id="exCsv">ייצוא הלוגבוק ל-CSV (לאקסל)</button>
+        <button id="exJson">שמירת גיבוי מלא (JSON)</button>
+      </div>
+      <div class="row">
+        <div class="field"><label for="jsonFile">שחזור מגיבוי JSON</label><input type="file" id="jsonFile" accept=".json,application/json"></div>
+      </div>
+      <div id="exFallback" hidden class="field">
+        <label for="exText">לא ניתן להוריד קובץ מהתצוגה הזו. אפשר להעתיק את התוכן ולשמור אותו בקובץ:</label>
+        <textarea id="exText" readonly style="min-height:140px;direction:ltr"></textarea>
+        <div class="row"><button id="exCopy">העתק</button></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="modal" role="dialog" aria-modal="true" aria-labelledby="modalText"><div class="box"><p id="modalText" style="margin:0"></p><div class="row"><button class="primary" id="modalOk">אישור</button><button id="modalCancel">ביטול</button></div></div></div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+"use strict";
+/* ---------- constants ---------- */
+const CATS = {airplane:'מטוס', helicopter:'מסוק', microlight:'מז"מ', glider:'דאון'};
+const ENG = {SE:'חד-מנועי', ME:'רב-מנועי', NONE:'ללא מנוע'};
+const FUNCS = ['pic','cop','dual','instr'];
+const REM_TYPES = {license:'רישיון / הגדר', medical:'רפואי', check:'בדיקת טיסה', aircraft:'כלי טיס', other:'אחר'};
+const LOCAL_KEY = 'logbook-data';
+
+/* ---------- state ---------- */
+const S = {mode:'loading', deleted:{}, profileU:0, settingsU:0, updatedAt:0, flights:[], aircraft:[], reminders:[], settings:{}, profile:{}, editId:null, acEditId:null, remEditId:null, view:'logbook'};
+
+/* ---------- helpers ---------- */
+const $ = (s, r=document) => r.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2,8);
+const clone = o => JSON.parse(JSON.stringify(o));
+
+function parseDur(v){
+  if (v == null) return 0;
+  v = String(v).trim();
+  if (!v) return 0;
+  const m = v.match(/^(\d+):(\d{1,2})(?::\d{1,2})?$/);
+  if (m) return (+m[1]) * 60 + (+m[2]);
+  const n = parseFloat(v.replace(',', '.'));
+  return isNaN(n) || n < 0 ? 0 : Math.round(n * 60);
+}
+/** Minutes are stored; hours are shown in tenths (1.4). */
+function fmtDur(min, zero){
+  min = Math.round(min || 0);
+  if (!min) return zero ? '0.0' : '';
+  return (min / 60).toFixed(1);
+}
+function hhmm(v){
+  const m = String(v || '').match(/(\d{1,2}):(\d{2})/);
+  if (!m || +m[1] > 23 || +m[2] > 59) return '';
+  return String(+m[1]).padStart(2, '0') + ':' + m[2];
+}
+function diffTimes(a, b){
+  if (!a || !b) return 0;
+  const [ah, am] = a.split(':').map(Number), [bh, bm] = b.split(':').map(Number);
+  let d = (bh * 60 + bm) - (ah * 60 + am);
+  if (d < 0) d += 1440;
+  return d;
+}
+function iso(y, m, d){
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) return null;
+  return y + '-' + String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+}
+function parseDate(v, fmt){
+  v = String(v || '').trim();
+  if (!v) return null;
+  let m = v.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) return iso(+m[1], +m[2], +m[3]);
+  m = v.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})/);
+  if (!m) return null;
+  let a = +m[1], b = +m[2], y = +m[3];
+  if (y < 100) y += 2000;
+  return fmt === 'DMY' ? iso(y, b, a) : iso(y, a, b);
+}
+function detectDateFmt(values){
+  for (const v of values){
+    const m = String(v || '').trim().match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-]\d{2,4}/);
+    if (!m) continue;
+    if (+m[1] > 12) return 'DMY';
+    if (+m[2] > 12) return 'MDY';
+  }
+  return 'MDY';
+}
+function parseCSV(text){
+  text = text.replace(/^﻿/, '');
+  const first = text.split(/\r?\n/)[0] || '';
+  const delim = first.split(';').length > first.split(',').length ? ';' : ',';
+  const rows = []; let row = [], f = '', q = false;
+  for (let i = 0; i < text.length; i++){
+    const c = text[i];
+    if (q){
+      if (c === '"'){ if (text[i + 1] === '"'){ f += '"'; i++; } else q = false; }
+      else f += c;
+    } else if (c === '"') q = true;
+    else if (c === delim){ row.push(f); f = ''; }
+    else if (c === '\n'){ row.push(f); rows.push(row); row = []; f = ''; }
+    else if (c !== '\r') f += c;
+  }
+  if (f !== '' || row.length){ row.push(f); rows.push(row); }
+  return rows.filter(r => r.some(x => x.trim() !== ''));
+}
+function csvCell(v){
+  v = String(v ?? '');
+  return /[",\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+}
+function fmtDateHe(d){
+  if (!d) return '';
+  const [y, m, dd] = d.split('-');
+  return dd + '/' + m + '/' + y;
+}
+function todayISO(){
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function addDaysISO(isoDate, n){
+  const [y, m, d] = isoDate.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d + n));
+  return dt.toISOString().slice(0, 10);
+}
+function daysUntil(isoDate){
+  const [y, m, d] = isoDate.split('-').map(Number);
+  const t = todayISO().split('-').map(Number);
+  return Math.round((Date.UTC(y, m - 1, d) - Date.UTC(t[0], t[1] - 1, t[2])) / 86400000);
+}
+function monthKey(date){ return 'fl_' + date.slice(0, 4) + '_' + date.slice(5, 7); }
+function mapCat(v){
+  v = String(v || '').toLowerCase();
+  if (/heli|rotor|gyro|מסוק/.test(v)) return 'helicopter';
+  if (/glider|sailplane|דאון/.test(v)) return 'glider';
+  if (/weight|parachute|ultra|micro|light sport|מז"מ|מזמ/.test(v)) return 'microlight';
+  return 'airplane';
+}
+function acLabel(a){
+  const name = [a.manufacturer, a.model].filter(Boolean).join(' ');
+  return a.registration + (name ? ' · ' + name : '') + ' (' + (CATS[a.category] || '') + ')';
+}
+function flightFunc(f){
+  let best = '', max = 0;
+  for (const k of FUNCS) if ((f[k] || 0) > max){ max = f[k]; best = k; }
+  return best;
+}
+function dupKey(f){ return [f.date, (f.reg || '').toUpperCase(), (f.dep || '').toUpperCase(), (f.arr || '').toUpperCase(), f.total || 0].join('|'); }
+
+/* ---------- UI helpers ---------- */
+let toastTimer;
+function toast(msg, ms){
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), ms || 3200);
+}
+function confirmBox(text, okLabel){
+  return new Promise(res => {
+    const m = $('#modal'); $('#modalText').textContent = text; $('#modalOk').textContent = okLabel || 'אישור';
+    m.classList.add('show'); $('#modalOk').focus();
+    const done = v => { m.classList.remove('show'); $('#modalOk').onclick = $('#modalCancel').onclick = null; res(v); };
+    $('#modalOk').onclick = () => done(true); $('#modalCancel').onclick = () => done(false);
+  });
+}
+
+/* ---------- local storage + change tracking ---------- */
+/* Local-first: every change is saved on this device at once, then synced to the
+   user's hidden Drive app folder. Each record carries u (last-change time, ms);
+   deletions are kept in S.deleted so two devices can be merged safely. */
+const META_KEY = 'logbook-meta';
+const COLS = ['flights', 'aircraft', 'reminders'];
+let META = {};          // {owner, fileId, dirty, lastSync}
+let shadow = null;      // last committed content, to detect what changed
+let changeRev = 0;
+
+function stableStr(v){
+  if (Array.isArray(v)) return '[' + v.map(stableStr).join(',') + ']';
+  if (v && typeof v === 'object') return '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + stableStr(v[k])).join(',') + '}';
+  return JSON.stringify(v === undefined ? null : v);
+}
+const stripU = r => { const o = Object.assign({}, r); delete o.u; return o; };
+function snapshotMaps(){
+  const m = {};
+  for (const c of COLS) m[c] = new Map(S[c].map(r => [r.id, stableStr(stripU(r))]));
+  m.profile = stableStr(S.profile || {}); m.settings = stableStr(S.settings || {});
+  return m;
+}
+function emptyDoc(){ return {app: 'logbook', version: 2, updatedAt: 0, flights: [], aircraft: [], reminders: [], settings: {}, profile: {}, profileU: 0, settingsU: 0, deleted: {}}; }
+function docFromState(){
+  return {app: 'logbook', version: 2, updatedAt: S.updatedAt || 0, flights: S.flights, aircraft: S.aircraft, reminders: S.reminders,
+    settings: S.settings, profile: S.profile, profileU: S.profileU || 0, settingsU: S.settingsU || 0, deleted: S.deleted || {}};
+}
+function applyDoc(d){
+  d = Object.assign(emptyDoc(), d || {});
+  S.flights = clone(d.flights || []); S.aircraft = clone(d.aircraft || []); S.reminders = clone(d.reminders || []);
+  S.settings = clone(d.settings || {}); S.profile = clone(d.profile || {});
+  S.profileU = d.profileU || 0; S.settingsU = d.settingsU || 0; S.deleted = clone(d.deleted || {}); S.updatedAt = d.updatedAt || 0;
+  shadow = snapshotMaps();
+}
+function saveLocal(){
+  try { localStorage.setItem(LOCAL_KEY, JSON.stringify(docFromState())); }
+  catch(e){ toast('השמירה במכשיר נכשלה. שמור קובץ גיבוי מיד.', 6000); }
+}
+function loadLocal(){
+  let d = null;
+  try { d = JSON.parse(localStorage.getItem(LOCAL_KEY) || 'null'); } catch(e){}
+  applyDoc(d);
+}
+function saveMeta(){ try { localStorage.setItem(META_KEY, JSON.stringify(META)); } catch(e){} }
+function loadMeta(){ try { META = JSON.parse(localStorage.getItem(META_KEY) || '{}') || {}; } catch(e){ META = {}; } }
+
+/** Record what changed since the last commit, save locally and queue a sync. */
+function commit(){
+  const now = Date.now(), prev = shadow || snapshotMaps();
+  let changed = false;
+  for (const c of COLS){
+    const seen = new Set();
+    S[c] = S[c].map(r => {
+      seen.add(r.id);
+      if (prev[c].get(r.id) !== stableStr(stripU(r)) || !r.u){ changed = true; return Object.assign({}, r, {u: now}); }
+      return r;
+    });
+    for (const id of prev[c].keys()) if (!seen.has(id)){ S.deleted[id] = now; changed = true; }
+  }
+  if (stableStr(S.profile || {}) !== prev.profile){ S.profileU = now; changed = true; }
+  if (stableStr(S.settings || {}) !== prev.settings){ S.settingsU = now; changed = true; }
+  shadow = snapshotMaps();
+  if (changed){
+    S.updatedAt = now; changeRev++;
+    META.dirty = true; saveMeta();
+  }
+  saveLocal();
+  if (changed) afterLocalChange();
+  updateStatus();
+}
+/* kept for the existing call sites */
+function persist(){ commit(); return Promise.resolve(); }
+
+/** Merge two logbook documents: newest version of each record wins, deletions win over older edits. */
+function mergeDocs(a, b){
+  a = Object.assign(emptyDoc(), a || {}); b = Object.assign(emptyDoc(), b || {});
+  const out = emptyDoc();
+  const del = Object.assign({}, a.deleted);
+  for (const [id, t] of Object.entries(b.deleted)) del[id] = Math.max(del[id] || 0, t);
+  for (const c of COLS){
+    const m = new Map();
+    for (const r of [...a[c], ...b[c]]){ const o = m.get(r.id); if (!o || (r.u || 0) > (o.u || 0)) m.set(r.id, r); }
+    out[c] = [...m.values()].filter(r => !(del[r.id] && del[r.id] >= (r.u || 0)));
+  }
+  out.deleted = del;
+  out.profile = (b.profileU || 0) > (a.profileU || 0) ? b.profile : a.profile; out.profileU = Math.max(a.profileU || 0, b.profileU || 0);
+  out.settings = (b.settingsU || 0) > (a.settingsU || 0) ? b.settings : a.settings; out.settingsU = Math.max(a.settingsU || 0, b.settingsU || 0);
+  out.updatedAt = Math.max(a.updatedAt || 0, b.updatedAt || 0);
+  return out;
+}
+function canon(d){
+  d = Object.assign(emptyDoc(), d || {});
+  const sortById = arr => [...arr].sort((x, y) => String(x.id).localeCompare(String(y.id)));
+  return stableStr({flights: sortById(d.flights), aircraft: sortById(d.aircraft), reminders: sortById(d.reminders),
+    settings: d.settings, profile: d.profile, profileU: d.profileU, settingsU: d.settingsU, deleted: d.deleted});
+}
+
+/* ---------- Google sign-in and Drive sync ---------- */
+const SCOPES = 'https://www.googleapis.com/auth/drive.appdata openid email';
+const DATA_FILE = 'logbook-data.json';
+let tokenClient = null, accessToken = null, tokenExp = 0, sessionEmail = '', pendingAuth = null;
+let syncing = false, syncAgain = false, syncTimer = null, lastSyncErr = '';
+
+const cfgClientId = () => String((window.LOGBOOK_CONFIG && window.LOGBOOK_CONFIG.googleClientId) || '').trim();
+const configured = () => /\.apps\.googleusercontent\.com$/.test(cfgClientId());
+const gisReady = () => !!(window.google && google.accounts && google.accounts.oauth2);
+const hasToken = () => !!accessToken && Date.now() < tokenExp;
+
+function ensureTokenClient(){
+  if (tokenClient) return tokenClient;
+  if (!gisReady() || !configured()) return null;
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: cfgClientId(), scope: SCOPES,
+    callback: resp => {
+      const p = pendingAuth; pendingAuth = null;
+      if (!resp || resp.error){ if (p) p.reject(resp || {}); return; }
+      accessToken = resp.access_token; tokenExp = Date.now() + ((+resp.expires_in || 3600) - 60) * 1000;
+      if (p) p.resolve();
+    },
+    error_callback: err => { const p = pendingAuth; pendingAuth = null; if (p) p.reject(err || {}); }
+  });
+  return tokenClient;
+}
+/** Must be called from a click (the browser opens Google's sign-in window). */
+function requestToken(selectAccount){
+  return new Promise((resolve, reject) => {
+    const tc = ensureTokenClient();
+    if (!tc){ reject({type: configured() ? 'gis_not_loaded' : 'not_configured'}); return; }
+    if (pendingAuth) pendingAuth.reject({type: 'superseded'});
+    pendingAuth = {resolve, reject};
+    const opts = {prompt: selectAccount ? 'select_account' : ''};
+    if (META.owner && !selectAccount) opts.login_hint = META.owner;
+    tc.requestAccessToken(opts);
+  });
+}
+async function gfetch(url, opts){
+  opts = opts || {};
+  let res;
+  try { res = await fetch(url, Object.assign({}, opts, {headers: Object.assign({Authorization: 'Bearer ' + accessToken}, opts.headers || {})})); }
+  catch(e){ throw {type: 'network'}; }
+  if (res.status === 401){ accessToken = null; throw {type: 'auth'}; }
+  if (!res.ok){
+    let msg = ''; try { msg = (await res.json()).error.message; } catch(e){}
+    throw {type: 'http', status: res.status, message: msg};
+  }
+  return res;
+}
+async function fetchEmail(){
+  if (sessionEmail) return sessionEmail;
+  const j = await (await gfetch('https://www.googleapis.com/oauth2/v3/userinfo')).json();
+  sessionEmail = (j.email || '').toLowerCase();
+  return sessionEmail;
+}
+async function findDataFile(){
+  const q = encodeURIComponent(`name='${DATA_FILE}' and trashed=false`);
+  const j = await (await gfetch(`https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=${q}&fields=files(id,modifiedTime)&orderBy=modifiedTime%20desc&pageSize=10`)).json();
+  return (j.files && j.files[0] && j.files[0].id) || null;
+}
+async function readDataFile(id){ return (await gfetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?alt=media`)).json(); }
+async function createDataFile(doc){
+  const boundary = 'lb' + Math.random().toString(36).slice(2);
+  const meta = {name: DATA_FILE, parents: ['appDataFolder'], mimeType: 'application/json'};
+  const body = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(doc)}\r\n--${boundary}--`;
+  const j = await (await gfetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {method: 'POST', headers: {'Content-Type': 'multipart/related; boundary=' + boundary}, body})).json();
+  return j.id;
+}
+async function updateDataFile(id, doc){
+  await gfetch(`https://www.googleapis.com/upload/drive/v3/files/${encodeURIComponent(id)}?uploadType=media`, {method: 'PATCH', headers: {'Content-Type': 'application/json; charset=UTF-8'}, body: JSON.stringify(doc)});
+}
+
+/** Pull the Drive copy, merge it with this device, push the result back. */
+async function syncNow(){
+  if (syncing){ syncAgain = true; return; }
+  if (!navigator.onLine || !hasToken()){ updateStatus(); return; }
+  syncing = true; lastSyncErr = ''; updateStatus();
+  const startRev = changeRev;
+  try {
+    const email = await fetchEmail();
+    if (META.owner && email && META.owner !== email){
+      if (!await switchAccount(email)) return;
+    }
+    if (!META.owner && email){ META.owner = email; saveMeta(); }
+    let id = META.fileId || null, remote = null;
+    if (id){
+      try { remote = await readDataFile(id); }
+      catch(e){ if (e.type === 'http' && e.status === 404){ id = null; } else throw e; }
+    }
+    if (!id){ id = await findDataFile(); if (id) remote = await readDataFile(id); }
+    if (remote && remote.app !== 'logbook') remote = null;
+    let merged = remote ? mergeDocs(docFromState(), remote) : docFromState();
+    if (changeRev !== startRev) merged = mergeDocs(docFromState(), merged); // edits made while we were waiting
+    if (canon(merged) !== canon(docFromState())){
+      applyDoc(merged); saveLocal(); render(); refreshForms();
+    }
+    if (!remote || canon(merged) !== canon(remote)){
+      if (id) await updateDataFile(id, merged); else id = await createDataFile(merged);
+    }
+    META.fileId = id; META.lastSync = new Date().toISOString();
+    META.dirty = changeRev !== startRev;
+    saveMeta();
+  } catch(e){
+    if (e.type === 'auth') lastSyncErr = 'החיבור ל-Google פג. לחץ כדי להתחבר שוב.';
+    else if (e.type === 'network') lastSyncErr = 'אין חיבור לאינטרנט. השינויים יסונכרנו כשהחיבור יחזור.';
+    else if (e.type === 'http' && e.status === 403) lastSyncErr = 'Google סירבה לגישה (' + (e.message || '403') + ').';
+    else lastSyncErr = 'הסנכרון נכשל' + (e.message ? ': ' + e.message : '') + '.';
+  } finally {
+    syncing = false; updateStatus();
+    if (S.view === 'settings') renderSync();
+    if (syncAgain || (META.dirty && !lastSyncErr)){ syncAgain = false; scheduleSync(1500); }
+  }
+}
+function scheduleSync(ms){
+  clearTimeout(syncTimer);
+  if (hasToken() && navigator.onLine) syncTimer = setTimeout(syncNow, ms == null ? 3000 : ms);
+}
+/** A click that changed data can also renew an expired Google session. */
+function afterLocalChange(){
+  if (hasToken()){ scheduleSync(); return; }
+  const active = navigator.userActivation && navigator.userActivation.isActive;
+  if (META.owner && active && navigator.onLine && configured() && gisReady()){
+    requestToken(false).then(() => scheduleSync(200)).catch(() => updateStatus());
+  }
+}
+/** Connect, or reconnect, from a click. */
+async function connectGoogle(selectAccount){
+  if (!configured()){ toast('האפליקציה עוד לא הוגדרה: חסר מזהה Google בקובץ config.js', 6000); return; }
+  if (!navigator.onLine){ toast('אין חיבור לאינטרנט'); return; }
+  if (!gisReady()){ toast('רכיב ההתחברות של Google עוד נטען. נסה שוב בעוד רגע.'); return; }
+  try { await requestToken(selectAccount); }
+  catch(e){ if (e && e.type !== 'superseded') toast('ההתחברות ל-Google לא הושלמה'); updateStatus(); return; }
+  sessionEmail = '';
+  await syncNow();
+  if (!lastSyncErr) toast('מחובר ל-Google Drive: ' + (META.owner || ''), 3500);
+}
+async function switchAccount(email){
+  const ok = await confirmBox(`במכשיר הזה שמורים הנתונים של ${META.owner}, והתחברת עכשיו כ-${email}. להחליף את הנתונים במכשיר בנתונים של ${email}? הנתונים של ${META.owner} נשארים ב-Drive שלו.` + (META.dirty ? ' שים לב: יש במכשיר שינויים שעוד לא סונכרנו ל-Drive של ' + META.owner + ', והם יימחקו מהמכשיר.' : ''), 'החלף');
+  if (!ok){ signOut(true); return false; }
+  applyDoc(emptyDoc()); META = {owner: email}; saveMeta(); saveLocal(); render(); refreshForms();
+  return true;
+}
+function signOut(quiet){
+  try { if (accessToken && gisReady()) google.accounts.oauth2.revoke(accessToken, () => {}); } catch(e){}
+  accessToken = null; tokenExp = 0; sessionEmail = '';
+  updateStatus(); if (S.view === 'settings') renderSync();
+  if (!quiet) toast('התנתקת מ-Google. הנתונים נשארו במכשיר.');
+}
+function refreshForms(){
+  }
+
+/* ---------- routing ---------- */
+const VIEWS = ['logbook', 'new', 'aircraft', 'reminders', 'data', 'settings'];
+function route(){
+  const h = location.hash.replace('#', '');
+  const v = VIEWS.includes(h) ? h : 'logbook';
+  const entering = v !== S.view || v === 'new';
+  S.view = v;
+  document.querySelectorAll('section.view').forEach(s => s.classList.toggle('active', s.id === 'v-' + v));
+  document.querySelectorAll('nav.tabs a').forEach(a => { if (a.dataset.v === v) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
+  if (v === 'new' && entering) fillFlightForm();
+  if (v === 'settings' && entering){ fillProfileForm(); renderSync(); }
+  render();
+}
+window.addEventListener('hashchange', route);
+$('#tab-new').addEventListener('click', () => { S.editId = null; if (location.hash === '#new') fillFlightForm(); });
+
+/* ---------- render ---------- */
+function render(){
+  renderFilterOptions();
+  if (S.view === 'logbook') renderLogbook();
+  if (S.view === 'new') renderAcSelect();
+  if (S.view === 'aircraft') renderAircraft();
+  if (S.view === 'reminders') renderReminders();
+  if (S.view === 'settings') renderSync();
+}
+
+/* ----- logbook ----- */
+const F = {from:'', to:'', cat:'', ac:'', func:'', cond:'', q:''};
+try { Object.assign(F, JSON.parse(localStorage.getItem('logbook-filter') || '{}')); } catch(e){}
+function renderFilterOptions(){
+  const cs = $('#f-cat'), as = $('#f-ac');
+  cs.innerHTML = '<option value="">הכול</option>' + Object.entries(CATS).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join('');
+  const regs = [...new Set([...S.aircraft.map(a => a.registration), ...S.flights.map(f => f.reg)].filter(Boolean))].sort();
+  as.innerHTML = '<option value="">הכול</option>' + regs.map(r => `<option value="${esc(r)}">${esc(r)}</option>`).join('');
+  for (const k of Object.keys(F)) { const el = $('#f-' + k); if (el) el.value = F[k]; }
+}
+function filtered(){
+  const q = F.q.trim().toLowerCase();
+  return S.flights.filter(f => {
+    if (F.from && f.date < F.from) return false;
+    if (F.to && f.date > F.to) return false;
+    if (F.cat && f.cat !== F.cat) return false;
+    if (F.ac && f.reg !== F.ac) return false;
+    if (F.func && !(f[F.func] > 0)) return false;
+    if (F.cond === 'night' && !(f.night > 0)) return false;
+    if (F.cond === 'ifr' && !(f.ifr > 0)) return false;
+    if (q){
+      const hay = [f.dep, (f.via || []).join(' '), f.arr, f.reg, f.acType, f.picName, f.remarks].join(' ').toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  }).sort((a, b) => (b.date + (b.depT || '')).localeCompare(a.date + (a.depT || '')));
+}
+function sum(list, k){ return list.reduce((s, f) => s + (+f[k] || 0), 0); }
+function renderPilotBar(){
+  const p = S.profile || {}, el = $('#pilotBar');
+  if (!p.name && !p.licNo){
+    el.innerHTML = S.mode === 'loading' ? '' : '<span class="note">עדיין לא הוזנו פרטי טייס.</span> <a href="#settings">מלא פרופיל טייס</a>';
+    el.hidden = S.mode === 'loading'; return;
+  }
+  el.hidden = false;
+  const exp = (label, d) => {
+    if (!d) return '';
+    const n = daysUntil(d), cls = n < 0 ? 'bad' : n <= 60 ? 'warn' : 'ok';
+    return `<span>${esc(label)} <span class="chip ${cls}"><span class="num">${esc(fmtDateHe(d))}</span></span></span>`;
+  };
+  el.innerHTML = `<strong>${esc(p.name || p.nameEn || '')}</strong>
+    ${p.licType || p.licNo ? `<span>${esc(p.licType || 'רישיון')} <span class="mono">${esc(p.licNo || '')}</span></span>` : ''}
+    ${p.ratings ? `<span>הגדרים: ${esc(p.ratings)}</span>` : ''}
+    ${exp('תוקף רישיון', p.licExp)}${exp('רפואי ' + (p.medClass || ''), p.medExp)}
+    <a href="#settings" class="note">עריכה</a>`;
+}
+function renderLogbook(){
+  renderPilotBar();
+  const list = filtered();
+  const since90 = addDaysISO(todayISO(), -90);
+  const recent = S.flights.filter(f => f.date >= since90);
+  const last = S.flights.reduce((m, f) => f.date > m ? f.date : m, '');
+  const isFiltered = Object.values(F).some(Boolean);
+  $('#tiles').innerHTML = [
+    ['סה"כ זמן טיסה', fmtDur(sum(list, 'total'), true), isFiltered ? 'לפי הסינון' : 'כל הטיסות'],
+    ['טיסות', list.length, isFiltered ? 'לפי הסינון' : 'כל הטיסות'],
+    ['זמן PIC', fmtDur(sum(list, 'pic'), true), 'עמודה 11'],
+    ['טיסה אחרונה', last ? fmtDateHe(last) : '—', last ? 'לפני ' + (-daysUntil(last)) + ' ימים' : 'אין עדיין'],
+  ].map(([k, v, s]) => `<div class="tile"><span class="k">${esc(k)}</span><span class="v">${esc(v)}</span><span class="s">${esc(s)}</span></div>`).join('');
+
+  const ldgRow = (label, sub, fl) => {
+    const d = sum(fl, 'ldgD'), n = sum(fl, 'ldgN');
+    return `<tr><td class="txt">${esc(label)}<span class="sub">${esc(sub)}</span></td><td class="num">${d}</td><td class="num">${n}</td><td class="num"><strong>${d + n}</strong></td></tr>`;
+  };
+  const yearStart = todayISO().slice(0, 4) + '-01-01';
+  $('#ldgSummary').innerHTML = `<table class="ldg">
+    <thead><tr><th class="txt">תקופה</th><th>נחיתות יום</th><th>נחיתות לילה</th><th>סה"כ</th></tr></thead>
+    <tbody>
+      ${isFiltered ? ldgRow('לפי הסינון', list.length + ' טיסות', list) : ''}
+      ${ldgRow('90 הימים האחרונים', 'מ-' + fmtDateHe(since90), recent)}
+      ${ldgRow('השנה', 'מ-' + fmtDateHe(yearStart), S.flights.filter(f => f.date >= yearStart))}
+      ${ldgRow('כל הלוגבוק', S.flights.length + ' טיסות', S.flights)}
+    </tbody></table>`;
+
+  const wrap = $('#tableWrap');
+  if (S.mode === 'loading'){ wrap.innerHTML = '<div class="empty">טוען את הלוגבוק…</div>'; return; }
+  if (!S.flights.length){
+    wrap.innerHTML = `<div class="empty"><p>הלוגבוק ריק. כדי להתחיל:</p><p>1. <a href="#aircraft">הוסף כלי טיס לספרייה</a> &nbsp; 2. <a href="#new">רשום טיסה</a> &nbsp; או <a href="#data">ייבא טיסות מ-Pilot Pro</a></p></div>`;
+    return;
+  }
+  if (!list.length){ wrap.innerHTML = '<div class="empty">אין טיסות שמתאימות לסינון.</div>'; return; }
+  const d = v => fmtDur(v);
+  const rows = list.map(f => `<tr data-id="${esc(f.id)}">
+    <td class="num">${esc(fmtDateHe(f.date))}</td>
+    <td><span class="mono">${esc(f.dep)}</span><span class="sub num">${esc(f.depT)}</span></td>
+    <td>${f.via && f.via.length ? `<span class="sub">דרך <span class="mono">${esc(f.via.join(' · '))}</span></span>` : ''}<span class="mono">${esc(f.arr)}</span><span class="sub num">${esc(f.arrT)}</span></td>
+    <td class="txt">${esc(f.acType || '')}<span class="sub mono">${esc(f.reg)}</span></td>
+    <td class="num">${d(f.spSE)}</td><td class="num">${d(f.spME)}</td><td class="num">${d(f.mp)}</td>
+    <td class="num"><strong>${d(f.total)}</strong></td>
+    <td class="txt">${esc(f.picName)}</td>
+    <td class="num">${f.ldgD || ''}</td><td class="num">${f.ldgN || ''}</td>
+    <td class="num">${d(f.night)}</td><td class="num">${d(f.ifr)}</td>
+    <td class="num">${d(f.pic)}</td><td class="num">${d(f.cop)}</td><td class="num">${d(f.dual)}</td><td class="num">${d(f.instr)}</td>
+    <td class="txt">${esc(f.remarks)}</td></tr>`).join('');
+  const T = k => fmtDur(sum(list, k), true);
+  wrap.innerHTML = `<table>
+    <thead>
+      <tr class="colnos"><th>1</th><th>2</th><th>3</th><th>4</th><th colspan="2">5</th><th>6</th><th>7</th><th>8</th><th colspan="2">9</th><th colspan="2">10</th><th colspan="4">11</th><th>13</th></tr>
+      <tr><th rowspan="2">תאריך</th><th rowspan="2">המראה</th><th rowspan="2">נחיתה</th><th rowspan="2" class="txt">כלי טיס</th>
+        <th colspan="2" class="grp">טייס יחיד</th><th rowspan="2">רב-טייסים</th><th rowspan="2">זמן כולל</th><th rowspan="2" class="txt">טייס מפקד</th>
+        <th colspan="2" class="grp">נחיתות</th><th colspan="2" class="grp">תנאי הטסה</th><th colspan="4" class="grp">זמן לפי תפקיד</th><th rowspan="2" class="txt">הערות</th></tr>
+      <tr><th>SE</th><th>ME</th><th>יום</th><th>לילה</th><th>לילה</th><th>IFR</th><th>PIC</th><th>משנה</th><th>Dual</th><th>מדריך</th></tr>
+    </thead>
+    <tbody>${rows}</tbody>
+    <tfoot><tr><td colspan="4" class="txt">סה"כ (${list.length} טיסות)</td>
+      <td class="num">${T('spSE')}</td><td class="num">${T('spME')}</td><td class="num">${T('mp')}</td><td class="num">${T('total')}</td><td></td>
+      <td class="num">${sum(list, 'ldgD')}</td><td class="num">${sum(list, 'ldgN')}</td><td class="num">${T('night')}</td><td class="num">${T('ifr')}</td>
+      <td class="num">${T('pic')}</td><td class="num">${T('cop')}</td><td class="num">${T('dual')}</td><td class="num">${T('instr')}</td><td></td></tr></tfoot>
+  </table>`;
+}
+$('#tableWrap').addEventListener('click', e => {
+  const tr = e.target.closest('tbody tr'); if (!tr) return;
+  S.editId = tr.dataset.id; location.hash = 'new'; if (S.view === 'new') fillFlightForm();
+});
+for (const k of Object.keys(F)){
+  const el = $('#f-' + k);
+  el.addEventListener('input', () => { F[k] = el.value; saveFilter(); renderLogbook(); });
+}
+function saveFilter(){ try { localStorage.setItem('logbook-filter', JSON.stringify(F)); } catch(e){} }
+document.querySelectorAll('[data-preset]').forEach(b => b.addEventListener('click', () => {
+  const p = b.dataset.preset, t = todayISO();
+  F.to = p === 'all' ? '' : t;
+  F.from = p === '90' ? addDaysISO(t, -90) : p === 'year' ? t.slice(0, 4) + '-01-01' : p === '12m' ? addDaysISO(t, -365) : '';
+  if (p === 'all'){ for (const k of Object.keys(F)) F[k] = ''; }
+  saveFilter(); renderFilterOptions(); renderLogbook();
+}));
+
+/* ----- flight form ----- */
+const fx = id => $('#fl-' + id);
+function defaultAircraftId(){
+  if (S.settings.lastAircraftId && S.aircraft.some(a => a.id === S.settings.lastAircraftId)) return S.settings.lastAircraftId;
+  const latest = [...S.flights].sort((a, b) => b.date.localeCompare(a.date)).find(f => S.aircraft.some(a => a.id === f.acId));
+  return latest ? latest.acId : (S.aircraft[0] ? S.aircraft[0].id : '');
+}
+function renderAcSelect(keep){
+  const sel = fx('ac'); const cur = keep ?? sel.value;
+  const sorted = [...S.aircraft].sort((a, b) => a.registration.localeCompare(b.registration));
+  sel.innerHTML = '<option value="">בחר כלי טיס…</option>' + sorted.map(a => `<option value="${esc(a.id)}">${esc(acLabel(a))}</option>`).join('');
+  if (cur && !S.aircraft.some(a => a.id === cur)){
+    const f = S.flights.find(x => x.id === S.editId);
+    if (f) sel.insertAdjacentHTML('beforeend', `<option value="${esc(cur)}">${esc((f.reg || '') + ' · ' + (f.acType || '') + ' (לא בספרייה)')}</option>`);
+  }
+  sel.value = cur || '';
+  $('#noAircraft').hidden = S.aircraft.length > 0 || S.mode === 'loading';
+  showAcInfo();
+}
+function showAcInfo(){
+  const a = S.aircraft.find(x => x.id === fx('ac').value);
+  fx('ac-info').textContent = a ? [CATS[a.category], a.manufacturer, a.model, ENG[a.engine]].filter(Boolean).join(' · ') : '';
+}
+function fillFlightForm(){
+  const f = S.editId ? S.flights.find(x => x.id === S.editId) : null;
+  if (S.editId && !f) S.editId = null;
+  $('#formTitle').textContent = f ? 'עריכת טיסה' : 'טיסה חדשה';
+  $('#fl-delete').hidden = !f;
+  renderAcSelect(f ? f.acId : defaultAircraftId());
+  fx('date').value = f ? f.date : todayISO();
+  fx('dep').value = f ? f.dep || '' : ''; fx('arr').value = f ? f.arr || '' : '';
+  fx('depT').value = f ? f.depT || '' : ''; fx('arrT').value = f ? f.arrT || '' : '';
+  $('#viaList').innerHTML = '';
+  for (const v of (f && f.via) || []) addVia(v);
+  fillTotalOptions(f ? f.total : 0);
+  fx('mpchk').value = f && f.mp > 0 ? 'mp' : 'sp';
+  for (const k of ['spSE', 'spME', 'mp', 'night', 'ifr', 'pic', 'cop', 'dual', 'instr']) fx(k).value = f ? fmtDur(f[k]) : '';
+  fx('picName').value = f ? f.picName || '' : (S.profile.picName || 'SELF');
+  fx('ldgD').value = f ? (f.ldgD || '') : ''; fx('ldgN').value = f ? (f.ldgN || '') : '';
+  fx('func').value = f ? (flightFunc(f) || 'pic') : (S.settings.lastFunc || 'pic');
+  fx('remarks').value = f ? f.remarks || '' : '';
+}
+/** Total time is picked from 0.1 to 4.0 h (6-minute steps). A saved value off that list is kept as its own option. */
+function fillTotalOptions(current){
+  let opts = '<option value="">בחר…</option>';
+  for (let t = 1; t <= 40; t++) opts += `<option value="${t * 6}">${(t / 10).toFixed(1)}</option>`;
+  if (current && (current % 6 || current > 240)) opts += `<option value="${current}">${fmtDur(current)} (ערך קיים)</option>`;
+  fx('total').innerHTML = opts;
+  fx('total').value = current ? String(current) : '';
+}
+const totalMin = () => +fx('total').value || 0;
+function autoSplit(){
+  const total = totalMin();
+  const a = S.aircraft.find(x => x.id === fx('ac').value);
+  const mp = fx('mpchk').value === 'mp';
+  fx('spSE').value = !mp && (!a || a.engine !== 'ME') ? fmtDur(total) : '';
+  fx('spME').value = !mp && a && a.engine === 'ME' ? fmtDur(total) : '';
+  fx('mp').value = mp ? fmtDur(total) : '';
+  const fn = fx('func').value;
+  for (const k of FUNCS) fx(k).value = k === fn ? fmtDur(total) : '';
+}
+/* intermediate landings (placed between departure and arrival) */
+let viaSeq = 0;
+function addVia(value){
+  const id = 'fl-via-' + (++viaSeq);
+  const row = document.createElement('div');
+  row.className = 'viarow';
+  row.innerHTML = `<div class="field"><label for="${id}"></label><input id="${id}" class="ltr" maxlength="12" placeholder="LLMZ"></div>
+    <button type="button" class="small" aria-label="הסר נחיתת ביניים" title="הסר">×</button>`;
+  row.querySelector('input').value = value || '';
+  row.querySelector('button').addEventListener('click', () => { row.remove(); renumberVia(); });
+  $('#viaList').appendChild(row);
+  renumberVia();
+  return row.querySelector('input');
+}
+function renumberVia(){
+  document.querySelectorAll('#viaList .viarow label').forEach((l, i) => { l.textContent = 'נחיתת ביניים ' + (i + 1); });
+}
+const viaValues = () => [...document.querySelectorAll('#viaList input')].map(i => i.value.trim().toUpperCase()).filter(Boolean);
+$('#viaAdd').addEventListener('click', () => addVia('').focus());
+
+fx('total').addEventListener('change', autoSplit);
+fx('mpchk').addEventListener('change', autoSplit);
+fx('func').addEventListener('change', autoSplit);
+fx('ac').addEventListener('change', () => { showAcInfo(); if (totalMin()) autoSplit(); });
+['spSE', 'spME', 'mp', 'night', 'ifr', 'pic', 'cop', 'dual', 'instr'].forEach(k => fx(k).addEventListener('change', () => { const v = parseDur(fx(k).value); fx(k).value = fmtDur(v); }));
+$('#fl-cancel').addEventListener('click', () => { S.editId = null; location.hash = 'logbook'; });
+$('#fl-delete').addEventListener('click', async () => {
+  const f = S.flights.find(x => x.id === S.editId); if (!f) return;
+  if (!await confirmBox(`למחוק את הטיסה מ-${fmtDateHe(f.date)} (${f.reg || ''})? אי אפשר לבטל את המחיקה.`, 'מחק')) return;
+  S.flights = S.flights.filter(x => x.id !== f.id);
+  persist([monthKey(f.date)]); S.editId = null; toast('הטיסה נמחקה'); location.hash = 'logbook';
+});
+$('#flightForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const date = fx('date').value, acId = fx('ac').value;
+  if (!date){ toast('יש למלא תאריך'); return; }
+  if (!acId){ toast('יש לבחור כלי טיס'); return; }
+  const total = totalMin();
+  if (!total){ toast('יש לבחור זמן טיסה כולל'); fx('total').focus(); return; }
+  const a = S.aircraft.find(x => x.id === acId);
+  const old = S.editId ? S.flights.find(x => x.id === S.editId) : null;
+  const f = {
+    id: old ? old.id : newId(), date, acId,
+    reg: a ? a.registration : (old ? old.reg : ''), acType: a ? [a.manufacturer, a.model].filter(Boolean).join(' ') : (old ? old.acType : ''),
+    cat: a ? a.category : (old ? old.cat : 'airplane'), engine: a ? a.engine : (old ? old.engine : 'SE'),
+    dep: fx('dep').value.trim().toUpperCase(), depT: fx('depT').value, via: viaValues(), arr: fx('arr').value.trim().toUpperCase(), arrT: fx('arrT').value,
+    total, picName: fx('picName').value.trim(), ldgD: +fx('ldgD').value || 0, ldgN: +fx('ldgN').value || 0,
+    remarks: fx('remarks').value.trim()
+  };
+  for (const k of ['spSE', 'spME', 'mp', 'night', 'ifr', 'pic', 'cop', 'dual', 'instr']) f[k] = parseDur(fx(k).value);
+  const keys = [monthKey(date)];
+  if (old){ keys.push(monthKey(old.date)); S.flights = S.flights.map(x => x.id === old.id ? f : x); }
+  else S.flights.push(f);
+  S.settings = Object.assign({}, S.settings, {lastAircraftId: acId, lastFunc: fx('func').value});
+  persist([...keys, 'settings']);
+  toast(old ? 'הטיסה עודכנה' : 'הטיסה נשמרה');
+  S.editId = null;
+  if (old) location.hash = 'logbook'; else fillFlightForm();
+});
+
+/* ----- aircraft ----- */
+const ax = id => $('#ac-' + id);
+ax('cat').innerHTML = Object.entries(CATS).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join('');
+ax('cat').addEventListener('change', () => { if (ax('cat').value === 'glider') ax('eng').value = 'NONE'; });
+function renderAircraft(){
+  const el = $('#acList');
+  if (S.mode === 'loading'){ el.innerHTML = '<div class="empty">טוען…</div>'; return; }
+  if (!S.aircraft.length){ el.innerHTML = '<div class="empty">הספרייה ריקה. הוסף את כלי הטיס הראשון בטופס למעלה.</div>'; return; }
+  const last = S.settings.lastAircraftId;
+  el.innerHTML = [...S.aircraft].sort((a, b) => a.registration.localeCompare(b.registration)).map(a => {
+    const fl = S.flights.filter(f => f.acId === a.id);
+    return `<div class="item"><div class="meta"><strong class="mono">${esc(a.registration)}</strong>
+      <span>${esc([CATS[a.category], a.manufacturer, a.model, ENG[a.engine]].filter(Boolean).join(' · '))}</span>
+      <span class="note">${fl.length} טיסות · <span class="num">${fmtDur(sum(fl, 'total'), true)}</span> שעות ${a.id === last ? '· <span class="chip ok">ברירת מחדל לטיסה הבאה</span>' : ''}</span></div>
+      <div class="acts"><button class="small" data-edit="${esc(a.id)}">עריכה</button><button class="small danger" data-del="${esc(a.id)}">מחיקה</button></div></div>`;
+  }).join('');
+}
+$('#acList').addEventListener('click', async e => {
+  const ed = e.target.closest('[data-edit]'), del = e.target.closest('[data-del]');
+  if (ed){
+    const a = S.aircraft.find(x => x.id === ed.dataset.edit); if (!a) return;
+    S.acEditId = a.id; ax('cat').value = a.category; ax('man').value = a.manufacturer || ''; ax('model').value = a.model || ''; ax('reg').value = a.registration; ax('eng').value = a.engine || 'SE';
+    $('#acFormTitle').textContent = 'עריכת כלי טיס'; ax('save').textContent = 'שמור שינויים'; ax('cancel').hidden = false; ax('man').focus();
+  }
+  if (del){
+    const a = S.aircraft.find(x => x.id === del.dataset.del); if (!a) return;
+    const n = S.flights.filter(f => f.acId === a.id).length;
+    if (!await confirmBox(`למחוק את ${a.registration} מהספרייה?` + (n ? ` ${n} הטיסות שנרשמו עליו יישארו בלוגבוק.` : ''), 'מחק')) return;
+    S.aircraft = S.aircraft.filter(x => x.id !== a.id); persist(['aircraft']); render(); toast('כלי הטיס הוסר מהספרייה');
+  }
+});
+function resetAcForm(){ S.acEditId = null; $('#acForm').reset(); $('#acFormTitle').textContent = 'הוספת כלי טיס'; ax('save').textContent = 'הוסף לספרייה'; ax('cancel').hidden = true; }
+ax('cancel').addEventListener('click', resetAcForm);
+$('#acForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const reg = ax('reg').value.trim().toUpperCase();
+  if (!reg){ toast('יש למלא רישום'); return; }
+  if (S.aircraft.some(a => a.registration === reg && a.id !== S.acEditId)){ toast('כלי טיס עם הרישום הזה כבר קיים בספרייה'); return; }
+  const a = {id: S.acEditId || newId(), category: ax('cat').value, manufacturer: ax('man').value.trim(), model: ax('model').value.trim(), registration: reg, engine: ax('eng').value};
+  const keys = ['aircraft'];
+  if (S.acEditId){
+    S.aircraft = S.aircraft.map(x => x.id === a.id ? a : x);
+    S.flights = S.flights.map(f => {
+      if (f.acId !== a.id) return f;
+      keys.push(monthKey(f.date));
+      return Object.assign({}, f, {reg: a.registration, acType: [a.manufacturer, a.model].filter(Boolean).join(' '), cat: a.category, engine: a.engine});
+    });
+  } else S.aircraft.push(a);
+  persist(keys); toast(S.acEditId ? 'כלי הטיס עודכן' : 'כלי הטיס נוסף'); resetAcForm(); render();
+});
+
+/* ----- reminders ----- */
+const rx = id => $('#rm-' + id);
+function gcalUrl(r){
+  const lead = Math.max(0, +r.lead || 0);
+  const start = addDaysISO(r.date, -lead).replace(/-/g, ''), end = addDaysISO(r.date, -lead + 1).replace(/-/g, '');
+  const title = (lead ? `בעוד ${lead} ימים: ` : '') + r.title;
+  const details = `מועד: ${fmtDateHe(r.date)}\n${r.notes || ''}\n(נוצר מהלוגבוק הדיגיטלי)`;
+  return 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + encodeURIComponent(title) + '&dates=' + start + '/' + end + '&details=' + encodeURIComponent(details);
+}
+function renderReminders(){
+  const el = $('#remList');
+  if (S.mode === 'loading'){ el.innerHTML = '<div class="empty">טוען…</div>'; return; }
+  if (!S.reminders.length){ el.innerHTML = '<div class="empty">אין תזכורות. הוסף למשל את מועד חידוש התעודה הרפואית או הרישיון.</div>'; return; }
+  el.innerHTML = [...S.reminders].sort((a, b) => a.date.localeCompare(b.date)).map(r => {
+    const d = daysUntil(r.date), lead = +r.lead || 0;
+    const chip = d < 0 ? `<span class="chip bad">עבר לפני ${-d} ימים</span>` : d <= lead ? `<span class="chip warn">בעוד ${d} ימים</span>` : `<span class="chip ok">בעוד ${d} ימים</span>`;
+    return `<div class="item"><div class="meta"><strong>${esc(r.title)}</strong>
+      <span class="note">${esc(REM_TYPES[r.type] || '')} · מועד <span class="num">${esc(fmtDateHe(r.date))}</span> · תזכורת ${lead} ימים לפני ${r.gcal ? '· <span class="chip mute">נשלח ליומן גוגל</span>' : ''}</span>
+      ${r.notes ? `<span class="note">${esc(r.notes)}</span>` : ''}${chip}</div>
+      <div class="acts"><a class="btn small" href="${esc(gcalUrl(r))}" target="_blank" rel="noopener" data-gcal="${esc(r.id)}">הוסף ליומן גוגל</a>
+      <button class="small" data-redit="${esc(r.id)}">עריכה</button><button class="small danger" data-rdel="${esc(r.id)}">מחיקה</button></div></div>`;
+  }).join('');
+}
+$('#remList').addEventListener('click', async e => {
+  const g = e.target.closest('[data-gcal]'), ed = e.target.closest('[data-redit]'), del = e.target.closest('[data-rdel]');
+  if (g){
+    const r = S.reminders.find(x => x.id === g.dataset.gcal);
+    if (r && !r.gcal){ S.reminders = S.reminders.map(x => x.id === r.id ? Object.assign({}, x, {gcal: true}) : x); persist(['reminders']); setTimeout(renderReminders, 300); }
+  }
+  if (ed){
+    const r = S.reminders.find(x => x.id === ed.dataset.redit); if (!r) return;
+    S.remEditId = r.id; rx('type').value = r.type; rx('title').value = r.title; rx('date').value = r.date; rx('lead').value = r.lead ?? 30; rx('notes').value = r.notes || '';
+    $('#remFormTitle').textContent = 'עריכת תזכורת'; rx('cancel').hidden = false; rx('title').focus();
+  }
+  if (del){
+    const r = S.reminders.find(x => x.id === del.dataset.rdel); if (!r) return;
+    if (!await confirmBox(`למחוק את התזכורת "${r.title}"? אירוע שכבר נוסף ליומן גוגל יישאר שם.`, 'מחק')) return;
+    S.reminders = S.reminders.filter(x => x.id !== r.id); persist(['reminders']); renderReminders();
+  }
+});
+function resetRemForm(){ S.remEditId = null; $('#remForm').reset(); rx('lead').value = 30; $('#remFormTitle').textContent = 'תזכורת חדשה'; rx('cancel').hidden = true; }
+rx('cancel').addEventListener('click', resetRemForm);
+$('#remForm').addEventListener('submit', e => {
+  e.preventDefault();
+  if (!rx('title').value.trim() || !rx('date').value){ toast('יש למלא כותרת ומועד'); return; }
+  const old = S.reminders.find(x => x.id === S.remEditId);
+  const r = {id: old ? old.id : newId(), type: rx('type').value, title: rx('title').value.trim(), date: rx('date').value, lead: Math.max(0, +rx('lead').value || 0), notes: rx('notes').value.trim(),
+    gcal: old && old.date === rx('date').value && (old.lead ?? 30) === Math.max(0, +rx('lead').value || 0) ? !!old.gcal : false};
+  S.reminders = old ? S.reminders.map(x => x.id === r.id ? r : x) : [...S.reminders, r];
+  persist(['reminders']); toast(old ? 'התזכורת עודכנה' : 'התזכורת נשמרה. לחץ "הוסף ליומן גוגל" כדי להעביר אותה ליומן.', 4500); resetRemForm(); renderReminders();
+});
+
+/* ----- pilot profile ----- */
+const PF = ['name', 'nameEn', 'picName', 'licType', 'licNo', 'licIssued', 'licExp', 'ratings', 'medClass', 'medExp', 'notes'];
+let pfDirty = false;
+function fillProfileForm(){
+  for (const k of PF) $('#pf-' + k).value = (S.profile || {})[k] || '';
+  pfDirty = false;
+}
+$('#pfForm').addEventListener('input', () => { pfDirty = true; });
+function readProfileForm(){
+  const p = {};
+  for (const k of PF) p[k] = $('#pf-' + k).value.trim();
+  if (p.licNo) p.licNo = p.licNo.toUpperCase();
+  return p;
+}
+$('#pfForm').addEventListener('submit', e => {
+  e.preventDefault();
+  S.profile = readProfileForm(); pfDirty = false;
+  persist(['profile']); toast('פרופיל הטייס נשמר');
+});
+$('#pf-rem').addEventListener('click', () => {
+  const p = readProfileForm();
+  const want = [];
+  if (p.licExp) want.push({type: 'license', title: 'תוקף רישיון טיס' + (p.licType ? ' – ' + p.licType : ''), date: p.licExp, lead: 60});
+  if (p.medExp) want.push({type: 'medical', title: 'חידוש תעודה רפואית' + (p.medClass ? ' ' + p.medClass : ''), date: p.medExp, lead: 45});
+  if (!want.length){ toast('יש למלא תאריך תוקף לרישיון או לתעודה הרפואית'); return; }
+  let added = 0, updated = 0;
+  for (const w of want){
+    const ex = S.reminders.find(r => r.type === w.type && r.auto);
+    if (ex){
+      if (ex.date !== w.date || ex.title !== w.title){ S.reminders = S.reminders.map(r => r === ex ? Object.assign({}, r, {date: w.date, title: w.title, gcal: ex.date === w.date ? r.gcal : false}) : r); updated++; }
+    } else { S.reminders = [...S.reminders, Object.assign({id: newId(), notes: '', auto: true, gcal: false}, w)]; added++; }
+  }
+  S.profile = p; pfDirty = false;
+  persist(['profile', 'reminders']);
+  toast(added || updated ? `נוצרו ${added} תזכורות ועודכנו ${updated}. אפשר להוסיף אותן ליומן גוגל בלשונית "תזכורות".` : 'התזכורות כבר קיימות ועדכניות', 5000);
+});
+
+/* ----- import ----- */
+const IMPORT_FIELDS = [
+  {k:'date', label:'תאריך', req:true, g:['flight date', 'date']},
+  {k:'reg', label:'רישום כלי טיס', g:['aircraft registration', 'registration', 'aircraft id', 'tail number', 'tail', 'ident']},
+  {k:'acType', label:'סוג / דגם כלי טיס', g:['aircraft type', 'type', 'model', 'make and model', 'make']},
+  {k:'cat', label:'קטגוריה (Category/Class)', g:['category/class', 'category', 'class']},
+  {k:'dep', label:'מקום המראה', g:['departure', 'from', 'origin']},
+  {k:'arr', label:'מקום נחיתה', g:['destination', 'to', 'arrival']},
+  {k:'route', label:'מסלול (יתווסף להערות)', g:['route']},
+  {k:'tOut', label:'שעת המראה', g:['time out', 'out', 'off', 'takeoff', 'departure time']},
+  {k:'tIn', label:'שעת נחיתה', g:['time in', 'in', 'on', 'landing time', 'arrival time']},
+  {k:'total', label:'זמן טיסה כולל', req:true, g:['duration', 'total time', 'total flight time', 'total']},
+  {k:'pic', label:'זמן PIC', g:['pic', 'pic time']},
+  {k:'cop', label:'זמן טייס משנה (SIC)', g:['sic', 'sic time', 'co-pilot', 'copilot']},
+  {k:'dual', label:'זמן בהדרכה (Dual)', g:['dual received', 'dual']},
+  {k:'instr', label:'זמן מדריך', g:['dual given', 'cfi', 'instructor']},
+  {k:'night', label:'זמן לילה', g:['night', 'night time']},
+  {k:'ifr', label:'זמן IFR / מכשירים', g:['actual instrument', 'instrument', 'ifr', 'imc']},
+  {k:'multi', label:'זמן צוות רב-טייסים', g:['multi-pilot', 'multi pilot']},
+  {k:'ldgD', label:'נחיתות יום', g:['day landings', 'day landings full stop', 'day ldg', 'landings day', 'landings']},
+  {k:'ldgN', label:'נחיתות לילה', g:['night landings', 'night landings full stop', 'night ldg', 'landings night']},
+  {k:'picName', label:'שם טייס מפקד', g:['pic name', 'name of pic', 'captain']},
+  {k:'remarks', label:'הערות', g:['remarks', 'comments', 'notes']},
+];
+function guessMapping(headers){
+  const norm = headers.map(h => h.trim().toLowerCase());
+  const used = new Set(), map = {};
+  for (const fd of IMPORT_FIELDS){
+    for (const p of fd.g){ const i = norm.indexOf(p); if (i >= 0 && !used.has(i)){ map[fd.k] = i; used.add(i); break; } }
+  }
+  for (const fd of IMPORT_FIELDS){
+    if (map[fd.k] != null) continue;
+    for (const p of fd.g){
+      if (p.length <= 4) continue;
+      const i = norm.findIndex((h, j) => !used.has(j) && h.includes(p));
+      if (i >= 0){ map[fd.k] = i; used.add(i); break; }
+    }
+  }
+  return map;
+}
+let CSV = null;
+$('#csvFile').addEventListener('change', async e => {
+  const file = e.target.files[0]; if (!file) return;
+  const text = await file.text();
+  const rows = parseCSV(text);
+  if (rows.length < 2){ $('#mapArea').innerHTML = '<div class="banner">לא נמצאו שורות נתונים בקובץ.</div>'; CSV = null; return; }
+  CSV = {headers: rows[0], rows: rows.slice(1), map: guessMapping(rows[0])};
+  renderMapping();
+});
+$('#csvDateFmt').addEventListener('change', () => { if (CSV) renderMapping(); });
+function colVal(row, k){ const i = CSV.map[k]; return i == null ? '' : (row[i] ?? '').trim(); }
+function buildImport(){
+  let fmt = $('#csvDateFmt').value;
+  if (fmt === 'auto') fmt = detectDateFmt(CSV.rows.map(r => colVal(r, 'date')));
+  const existing = new Set(S.flights.map(dupKey));
+  const acByReg = new Map(S.aircraft.map(a => [a.registration.toUpperCase(), a]));
+  const newAc = [], flights = []; let bad = 0, dup = 0;
+  for (const r of CSV.rows){
+    const date = parseDate(colVal(r, 'date'), fmt);
+    if (!date){ bad++; continue; }
+    const depT = hhmm(colVal(r, 'tOut')), arrT = hhmm(colVal(r, 'tIn'));
+    const total = parseDur(colVal(r, 'total')) || diffTimes(depT, arrT);
+    const reg = colVal(r, 'reg').toUpperCase();
+    let a = reg ? acByReg.get(reg) : null;
+    const catRaw = colVal(r, 'cat');
+    if (!a && reg){
+      const t = colVal(r, 'acType');
+      a = {id: newId(), category: mapCat(catRaw || t), manufacturer: '', model: t, registration: reg, engine: /multi/i.test(catRaw) ? 'ME' : (mapCat(catRaw || t) === 'glider' ? 'NONE' : 'SE')};
+      acByReg.set(reg, a); newAc.push(a);
+    }
+    const multi = parseDur(colVal(r, 'multi'));
+    const route = colVal(r, 'route');
+    const f = {
+      id: newId(), date, acId: a ? a.id : '', reg, acType: a ? [a.manufacturer, a.model].filter(Boolean).join(' ') : colVal(r, 'acType'),
+      cat: a ? a.category : mapCat(catRaw), engine: a ? a.engine : 'SE',
+      dep: colVal(r, 'dep').toUpperCase(), depT, arr: colVal(r, 'arr').toUpperCase(), arrT, total,
+      spSE: 0, spME: 0, mp: multi,
+      picName: colVal(r, 'picName'), ldgD: parseInt(colVal(r, 'ldgD')) || 0, ldgN: parseInt(colVal(r, 'ldgN')) || 0,
+      night: parseDur(colVal(r, 'night')), ifr: parseDur(colVal(r, 'ifr')),
+      pic: parseDur(colVal(r, 'pic')), cop: parseDur(colVal(r, 'cop')), dual: parseDur(colVal(r, 'dual')), instr: parseDur(colVal(r, 'instr')),
+      remarks: [route ? 'מסלול: ' + route : '', colVal(r, 'remarks')].filter(Boolean).join(' · ')
+    };
+    if (!multi){ if (f.engine === 'ME') f.spME = total; else f.spSE = total; }
+    const key = dupKey(f);
+    if (existing.has(key)){ dup++; continue; }
+    existing.add(key); flights.push(f);
+  }
+  return {fmt, flights, newAc, bad, dup};
+}
+function renderMapping(){
+  const opts = '<option value="">— לא לייבא —</option>' + CSV.headers.map((h, i) => `<option value="${i}">${esc(h || ('עמודה ' + (i + 1)))}</option>`).join('');
+  const res = buildImport();
+  const prev = res.flights.slice(0, 5);
+  $('#mapArea').innerHTML = `
+    <h3>שיוך עמודות</h3>
+    <p class="note">נמצאו ${CSV.rows.length} שורות. זיהוי תאריך: ${res.fmt === 'DMY' ? 'יום/חודש/שנה' : 'חודש/יום/שנה'}. שדות שמסומנים בכוכבית הם חובה.</p>
+    <div class="tablewrap"><table class="map-table"><thead><tr><th>שדה בלוגבוק</th><th>עמודה בקובץ</th><th>ערך לדוגמה</th></tr></thead><tbody>
+      ${IMPORT_FIELDS.map(fd => `<tr><td>${esc(fd.label)}${fd.req ? ' *' : ''}</td><td><select data-map="${fd.k}" id="map-${fd.k}">${opts}</select></td><td class="mono">${esc(colVal(CSV.rows[0], fd.k))}</td></tr>`).join('')}
+    </tbody></table></div>
+    <h3>תצוגה מקדימה</h3>
+    <div class="tablewrap"><table class="preview"><thead><tr><th>תאריך</th><th>רישום</th><th>מ-</th><th>אל</th><th>כולל</th><th>PIC</th><th>Dual</th><th>לילה</th><th>נחיתות</th></tr></thead><tbody>
+      ${prev.map(f => `<tr><td class="num">${fmtDateHe(f.date)}</td><td class="mono">${esc(f.reg)}</td><td class="mono">${esc(f.dep)}</td><td class="mono">${esc(f.arr)}</td><td class="num">${fmtDur(f.total)}</td><td class="num">${fmtDur(f.pic)}</td><td class="num">${fmtDur(f.dual)}</td><td class="num">${fmtDur(f.night)}</td><td class="num">${f.ldgD + f.ldgN}</td></tr>`).join('') || '<tr><td colspan="9">אין שורות תקינות לייבוא</td></tr>'}
+    </tbody></table></div>
+    <div class="banner info">ייובאו ${res.flights.length} טיסות${res.newAc.length ? `, ויתווספו ${res.newAc.length} כלי טיס חדשים לספרייה` : ''}.${res.dup ? ` ${res.dup} טיסות כבר קיימות ולא ייובאו שוב.` : ''}${res.bad ? ` ${res.bad} שורות דולגו בגלל תאריך לא תקין.` : ''}</div>
+    <div class="row"><button class="primary" id="doImport" ${res.flights.length ? '' : 'disabled'}>ייבא ${res.flights.length} טיסות</button></div>`;
+  document.querySelectorAll('[data-map]').forEach(s => {
+    const v = CSV.map[s.dataset.map]; s.value = v == null ? '' : String(v);
+    s.addEventListener('change', () => { if (s.value === '') delete CSV.map[s.dataset.map]; else CSV.map[s.dataset.map] = +s.value; renderMapping(); });
+  });
+  $('#doImport').addEventListener('click', doImport);
+}
+async function doImport(){
+  const res = buildImport();
+  if (CSV.map.date == null || CSV.map.total == null){ toast('יש לשייך עמודה לתאריך ולזמן הטיסה הכולל'); return; }
+  if (!await confirmBox(`לייבא ${res.flights.length} טיסות ללוגבוק?`, 'ייבא')) return;
+  S.aircraft = [...S.aircraft, ...res.newAc];
+  S.flights = [...S.flights, ...res.flights];
+  const keys = [...new Set(res.flights.map(f => monthKey(f.date)))];
+  $('#doImport').disabled = true;
+  toast('שומר את הטיסות…', 10000);
+  await persist(['aircraft', ...keys]);
+  toast(`יובאו ${res.flights.length} טיסות`, 4000);
+  CSV = null; $('#mapArea').innerHTML = ''; $('#csvFile').value = '';
+  location.hash = 'logbook'; render();
+}
+
+/* ----- export / backup ----- */
+function downloadFile(filename, data, type){
+  const url = URL.createObjectURL(new Blob([data], {type}));
+  const a = document.createElement('a'); a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+function backupJson(){
+  downloadFile('logbook-backup-' + todayISO() + '.json', JSON.stringify(docFromState(), null, 1), 'application/json');
+  S.settings = Object.assign({}, S.settings, {lastBackup: todayISO()});
+  persist(); toast('קובץ הגיבוי נשמר בתיקיית ההורדות'); if (S.view === 'settings') renderSync();
+}
+$('#exCsv').addEventListener('click', () => {
+  const head = ['Date / תאריך', 'Departure / המראה', 'Dep time (local) / שעת המראה מקומית', 'Via / נחיתות ביניים', 'Arrival / נחיתה', 'Arr time (local) / שעת נחיתה מקומית', 'Aircraft type / סוג', 'Registration / רישום', 'Category / קטגוריה',
+    'SP SE', 'SP ME', 'Multi-pilot', 'Total time / זמן כולל', 'PIC name / טייס מפקד', 'Landings day', 'Landings night', 'Night', 'IFR', 'PIC', 'Co-pilot', 'Dual', 'Instructor', 'Remarks / הערות'];
+  const list = [...S.flights].sort((a, b) => (a.date + (a.depT || '')).localeCompare(b.date + (b.depT || '')));
+  const lines = [head.map(csvCell).join(',')].concat(list.map(f => [fmtDateHe(f.date), f.dep, f.depT, (f.via || []).join(' - '), f.arr, f.arrT, f.acType, f.reg, CATS[f.cat] || '',
+    fmtDur(f.spSE), fmtDur(f.spME), fmtDur(f.mp), fmtDur(f.total), f.picName, f.ldgD || '', f.ldgN || '', fmtDur(f.night), fmtDur(f.ifr),
+    fmtDur(f.pic), fmtDur(f.cop), fmtDur(f.dual), fmtDur(f.instr), f.remarks].map(csvCell).join(',')));
+  downloadFile('logbook-' + todayISO() + '.csv', '﻿' + lines.join('\r\n'), 'text/csv');
+});
+$('#exJson').addEventListener('click', backupJson);
+$('#jsonFile').addEventListener('change', async e => {
+  const file = e.target.files[0]; if (!file) return;
+  let d;
+  try { d = JSON.parse(await file.text()); } catch(err){ toast('הקובץ אינו גיבוי JSON תקין'); return; }
+  if (!d || d.app !== 'logbook' || !Array.isArray(d.flights)){ toast('הקובץ אינו גיבוי של הלוגבוק הזה'); return; }
+  await restoreData(d, file.name);
+  e.target.value = '';
+});
+/** Replace all data with a backup (also from the claude.ai version). The backup wins over the Drive copy. */
+async function restoreData(d, label){
+  if (!await confirmBox(`השחזור מ-${label || 'הגיבוי'} יחליף את כל הנתונים (${S.flights.length} טיסות) ב-${d.flights.length} טיסות מהגיבוי, גם ב-Google Drive. להמשיך?`, 'שחזר')) return false;
+  const now = Date.now();
+  const stamp = arr => (arr || []).map(r => Object.assign({}, r, {u: now}));
+  const incoming = {flights: stamp(d.flights), aircraft: stamp(d.aircraft), reminders: stamp(d.reminders)};
+  const keepIds = new Set([...incoming.flights, ...incoming.aircraft, ...incoming.reminders].map(r => r.id));
+  for (const c of COLS) for (const r of S[c]) if (!keepIds.has(r.id)) S.deleted[r.id] = now;
+  for (const id of keepIds) delete S.deleted[id];
+  S.flights = incoming.flights; S.aircraft = incoming.aircraft; S.reminders = incoming.reminders;
+  S.profile = clone(d.profile || {}); S.profileU = now;
+  const s = clone(d.settings || {});
+  for (const k of ['backupTarget', 'driveFolderId', 'lastDriveBackup']) delete s[k];
+  S.settings = s; S.settingsU = now;
+  commit();
+  toast('הגיבוי שוחזר'); render();
+  if (S.view === 'settings') fillProfileForm();
+  return true;
+}
+
+/* ----- sync status and settings ----- */
+function fmtTime(iso){
+  if (!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleString('he-IL', {dateStyle: 'short', timeStyle: 'short'});
+}
+function updateStatus(){
+  const el = $('#status'); let s, t;
+  if (!configured()){ s = 'error'; t = 'האפליקציה לא הוגדרה (חסר מזהה Google)'; }
+  else if (syncing){ s = 'loading'; t = 'מסנכרן עם Google Drive…'; }
+  else if (!META.owner){ s = 'local'; t = 'נשמר במכשיר בלבד · התחבר ל-Google Drive'; }
+  else if (!navigator.onLine){ s = 'local'; t = META.dirty ? 'אין אינטרנט · השינויים יסונכרנו אחר כך' : 'אין אינטרנט · עובד מהמכשיר'; }
+  else if (lastSyncErr){ s = 'error'; t = lastSyncErr; }
+  else if (!hasToken()){ s = META.dirty ? 'local' : 'db'; t = META.dirty ? 'יש שינויים שלא סונכרנו · לחץ לסנכרון' : 'לחץ לסנכרון עם Google Drive'; }
+  else if (META.dirty){ s = 'loading'; t = 'ממתין לסנכרון…'; }
+  else { s = 'db'; t = 'מסונכרן עם Google Drive'; }
+  el.dataset.s = s; el.textContent = t;
+  el.title = META.lastSync ? 'סנכרון אחרון: ' + fmtTime(META.lastSync) : '';
+  $('#localBanner').hidden = !!META.owner || !configured();
+}
+$('#status').addEventListener('click', () => {
+  if (!configured()){ location.hash = 'settings'; return; }
+  if (hasToken()) syncNow(); else connectGoogle(false);
+});
+$('#bannerConnect').addEventListener('click', () => connectGoogle(false));
+function renderSync(){
+  const acct = $('#sy-acct'), info = $('#sy-info');
+  if (!configured()){
+    acct.textContent = 'האפליקציה עוד לא הוגדרה';
+    info.textContent = 'חסר מזהה Google (Client ID) בקובץ config.js. ראה את מדריך ההקמה.';
+  } else if (!META.owner){
+    acct.textContent = 'לא מחובר';
+    info.textContent = 'הנתונים נשמרים רק במכשיר הזה. התחבר כדי לשמור אותם ב-Google Drive שלך ולסנכרן בין מכשירים.';
+  } else {
+    acct.textContent = META.owner;
+    info.textContent = (hasToken() ? 'מחובר' : 'לא מחובר כרגע') + (META.lastSync ? ' · סנכרון אחרון ' + fmtTime(META.lastSync) : '') + (META.dirty ? ' · יש שינויים שממתינים לסנכרון' : '');
+  }
+  $('#sy-connect').hidden = !configured() || hasToken();
+  $('#sy-connect').textContent = META.owner ? 'התחבר מחדש' : 'התחבר ל-Google Drive';
+  $('#sy-now').hidden = !hasToken();
+  $('#sy-out').hidden = !hasToken();
+  $('#sy-switch').hidden = !META.owner || !configured();
+  const lb = S.settings.lastBackup;
+  $('#st-last').innerHTML = lb ? `קובץ גיבוי אחרון במחשב: <span class="num">${esc(fmtDateHe(lb))}</span>` : '';
+}
+$('#sy-connect').addEventListener('click', () => connectGoogle(false));
+$('#sy-now').addEventListener('click', () => syncNow());
+$('#sy-out').addEventListener('click', () => signOut(false));
+$('#sy-switch').addEventListener('click', () => connectGoogle(true));
+$('#sy-export').addEventListener('click', backupJson);
+$('#sy-wipe').addEventListener('click', async () => {
+  const warn = META.dirty && META.owner ? ' יש שינויים שעוד לא סונכרנו ל-Google Drive, והם יאבדו.' : (!META.owner ? ' הנתונים לא נשמרו ב-Google Drive, והם יאבדו אם לא שמרת קובץ גיבוי.' : ' הנתונים יישארו ב-Google Drive של ' + META.owner + '.');
+  if (!await confirmBox('למחוק את כל נתוני הלוגבוק מהמכשיר הזה?' + warn, 'מחק מהמכשיר')) return;
+  signOut(true);
+  try { localStorage.removeItem(LOCAL_KEY); localStorage.removeItem(META_KEY); localStorage.removeItem('logbook-filter'); } catch(e){}
+  META = {}; applyDoc(emptyDoc()); updateStatus(); render(); fillProfileForm();
+  toast('הנתונים נמחקו מהמכשיר');
+});
+window.addEventListener('online', () => { updateStatus(); if (META.dirty) scheduleSync(1000); });
+window.addEventListener('offline', updateStatus);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && hasToken()) scheduleSync(500);
+});
+setInterval(() => { if (document.visibilityState === 'visible' && hasToken()) syncNow(); else updateStatus(); }, 5 * 60 * 1000);
+
+/* ---------- init ---------- */
+function init(){
+  loadMeta(); loadLocal();
+  S.mode = 'local';
+  route();
+  if (S.view === 'new') fillFlightForm();
+  updateStatus();
+  const waitGis = setInterval(() => { if (gisReady()){ clearInterval(waitGis); ensureTokenClient(); updateStatus(); } }, 300);
+  setTimeout(() => clearInterval(waitGis), 30000);
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch(e){}
+  if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+init();
+</script>
+</body>
+</html>
