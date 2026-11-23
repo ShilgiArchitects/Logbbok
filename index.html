@@ -138,6 +138,32 @@ tfoot td{font-weight:700;background:var(--bg)}
 #toast.show{opacity:1}
 #modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;padding:16px;z-index:30}
 #modal.show{display:flex}
+/* clock time picker */
+.timefield{cursor:pointer;direction:ltr;text-align:right;font-family:var(--font-num)}
+#clock{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;padding:16px;z-index:40}
+#clock.show{display:flex}
+#clock .box{background:var(--surface);border-radius:22px;width:310px;max-width:100%;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.3);direction:ltr}
+#clock .head{background:var(--accent);color:var(--accent-ink);display:flex;justify-content:center;align-items:baseline;gap:2px;padding:18px 0 14px;font-family:var(--font-num);font-size:3.2rem;line-height:1}
+#clock .head button{all:unset;cursor:pointer;opacity:.6;padding:0 4px;border-radius:8px}
+#clock .head button.on{opacity:1}
+#clock .head button:focus-visible{outline:2px solid var(--accent-ink)}
+#clock .dialwrap{padding:18px 18px 4px;display:flex;justify-content:center}
+#clock svg{width:256px;height:256px;touch-action:none;user-select:none;cursor:pointer}
+#clock .face{fill:var(--bg)}
+#clock text{font-family:var(--font-body);fill:var(--ink);text-anchor:middle;dominant-baseline:central;pointer-events:none}
+#clock text.inner{font-size:12px;fill:var(--muted)}
+#clock text.outer{font-size:16px}
+#clock text.sel{fill:var(--accent-ink)}
+#clock .hand{stroke:var(--accent);stroke-width:2}
+#clock .knob{fill:var(--accent)}
+#clock .kbd{display:none;padding:28px 18px 18px;gap:8px;justify-content:center;align-items:center;font-family:var(--font-num);font-size:1.6rem}
+#clock .kbd input{width:72px;text-align:center;font-size:1.6rem;font-family:var(--font-num)}
+#clock.typing .kbd{display:flex}
+#clock.typing .dialwrap{display:none}
+#clock .foot{display:flex;align-items:center;gap:4px;padding:8px 12px 14px}
+#clock .foot .sp{flex:1}
+#clock .foot button{border:0;background:none;color:var(--accent);font-weight:700;padding:8px 10px}
+#clock .foot button.icon{color:var(--muted);font-size:1.2rem}
 #modal .box{background:var(--surface);border-radius:12px;padding:18px;max-width:420px;width:100%;display:grid;gap:14px}
 .map-table td,.map-table th{text-align:right}
 .map-table select{min-width:180px}
@@ -182,6 +208,7 @@ tfoot td{font-weight:700;background:var(--bg)}
           <button class="small" data-preset="year">השנה</button>
           <button class="small" data-preset="12m">12 חודשים</button>
           <button class="small" data-preset="all">הכול</button>
+          <button class="small danger" id="bulkDel" type="button" hidden></button>
         </div>
       </div>
       <div class="grid">
@@ -221,13 +248,13 @@ tfoot td{font-weight:700;background:var(--bg)}
             <legend>המראה ונחיתה <span class="colno">2 · 3</span></legend>
             <div class="grid">
               <div class="field"><label for="fl-dep">מקום המראה</label><input id="fl-dep" class="ltr" placeholder="LLHZ" maxlength="12"></div>
-              <div class="field"><label for="fl-depT">שעת המראה (זמן מקומי, רשות)</label><input type="time" id="fl-depT"></div>
+              <div class="field"><label for="fl-depT">שעת המראה (זמן מקומי, רשות)</label><input type="text" id="fl-depT" class="timefield" readonly inputmode="none" placeholder="--:--"></div>
             </div>
             <div class="via" id="viaList"></div>
             <div><button type="button" id="viaAdd" class="small viaadd"><span aria-hidden="true" class="plus">+</span> נחיתת ביניים</button></div>
             <div class="grid">
               <div class="field"><label for="fl-arr">מקום נחיתה</label><input id="fl-arr" class="ltr" placeholder="LLHA" maxlength="12"></div>
-              <div class="field"><label for="fl-arrT">שעת נחיתה (זמן מקומי, רשות)</label><input type="time" id="fl-arrT"></div>
+              <div class="field"><label for="fl-arrT">שעת נחיתה (זמן מקומי, רשות)</label><input type="text" id="fl-arrT" class="timefield" readonly inputmode="none" placeholder="--:--"></div>
             </div>
           </fieldset>
           <fieldset>
@@ -396,6 +423,11 @@ tfoot td{font-weight:700;background:var(--bg)}
       <div id="mapArea"></div>
     </div>
     <div class="card">
+      <h2>ייבואים קודמים</h2>
+      <p class="note">אפשר למחוק בבת אחת את כל הטיסות שהגיעו מייבוא מסוים, למשל כדי לייבא את הקובץ מחדש אחרי תיקון שיוך העמודות.</p>
+      <div class="list" id="impList"></div>
+    </div>
+    <div class="card">
       <h2>ייצוא וגיבוי</h2>
       <div class="row">
         <button id="exCsv">ייצוא הלוגבוק ל-CSV (לאקסל)</button>
@@ -414,6 +446,12 @@ tfoot td{font-weight:700;background:var(--bg)}
 </main>
 
 <div id="modal" role="dialog" aria-modal="true" aria-labelledby="modalText"><div class="box"><p id="modalText" style="margin:0"></p><div class="row"><button class="primary" id="modalOk">אישור</button><button id="modalCancel">ביטול</button></div></div></div>
+<div id="clock" role="dialog" aria-modal="true" aria-label="בחירת שעה"><div class="box">
+  <div class="head"><button type="button" id="ck-h" class="on" aria-label="שעות">07</button><span>:</span><button type="button" id="ck-m" aria-label="דקות">00</button></div>
+  <div class="dialwrap"><svg id="ck-dial" viewBox="0 0 256 256" aria-hidden="true"></svg></div>
+  <div class="kbd"><input id="ck-th" type="number" min="0" max="23" inputmode="numeric" aria-label="שעה"><span>:</span><input id="ck-tm" type="number" min="0" max="59" inputmode="numeric" aria-label="דקות"></div>
+  <div class="foot"><button type="button" class="icon" id="ck-kbd" title="הקלדה" aria-label="מעבר להקלדה">⌨</button><span class="sp"></span><button type="button" id="ck-clear">Clear</button><button type="button" id="ck-cancel">Cancel</button><button type="button" id="ck-set">Set</button></div>
+</div></div>
 <div id="toast" role="status" aria-live="polite"></div>
 
 <script>
@@ -434,15 +472,17 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt
 const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2,8);
 const clone = o => JSON.parse(JSON.stringify(o));
 
-function parseDur(v){
+/** Hours as "1.4", "1,4" or "1:24" → minutes. Anything else (a date, text) → null. */
+function parseDurStrict(v){
   if (v == null) return 0;
   v = String(v).trim();
   if (!v) return 0;
   const m = v.match(/^(\d+):(\d{1,2})(?::\d{1,2})?$/);
   if (m) return (+m[1]) * 60 + (+m[2]);
-  const n = parseFloat(v.replace(',', '.'));
-  return isNaN(n) || n < 0 ? 0 : Math.round(n * 60);
+  if (!/^\d*(?:[.,]\d+)?$/.test(v) || v === '.' || v === ',') return null;
+  return Math.round(parseFloat(v.replace(',', '.')) * 60);
 }
+function parseDur(v){ const n = parseDurStrict(v); return n == null ? 0 : n; }
 /** Minutes are stored; hours are shown in tenths (1.4). */
 function fmtDur(min, zero){
   min = Math.round(min || 0);
@@ -489,7 +529,8 @@ function detectDateFmt(values){
 function parseCSV(text){
   text = text.replace(/^﻿/, '');
   const first = text.split(/\r?\n/)[0] || '';
-  const delim = first.split(';').length > first.split(',').length ? ';' : ',';
+  const cnt = d => first.split(d).length - 1;
+  const delim = [',', ';', '\t'].reduce((best, d) => cnt(d) > cnt(best) ? d : best, ',');
   const rows = []; let row = [], f = '', q = false;
   for (let i = 0; i < text.length; i++){
     const c = text[i];
@@ -842,6 +883,7 @@ function render(){
   if (S.view === 'aircraft') renderAircraft();
   if (S.view === 'reminders') renderReminders();
   if (S.view === 'settings') renderSync();
+  if (S.view === 'data') renderImports();
 }
 
 /* ----- logbook ----- */
@@ -893,6 +935,9 @@ function renderPilotBar(){
 function renderLogbook(){
   renderPilotBar();
   const list = filtered();
+  const bd = $('#bulkDel');
+  bd.hidden = !list.length;
+  bd.textContent = Object.values(F).some(Boolean) ? `מחק ${list.length} טיסות מסוננות` : `מחק את כל ${list.length} הטיסות`;
   const since90 = addDaysISO(todayISO(), -90);
   const recent = S.flights.filter(f => f.date >= since90);
   const last = S.flights.reduce((m, f) => f.date > m ? f.date : m, '');
@@ -1032,6 +1077,84 @@ function autoSplit(){
   const fn = fx('func').value;
   for (const k of FUNCS) fx(k).value = k === fn ? fmtDur(total) : '';
 }
+/* clock time picker: hours on two rings (1–12 outside, 13–00 inside), then minutes */
+const CK = {input: null, h: 7, m: 0, mode: 'h', drag: false};
+const pad2 = n => String(n).padStart(2, '0');
+function ckPos(k, r){ const a = k * Math.PI / 6; return [128 + r * Math.sin(a), 128 - r * Math.cos(a)]; }
+function ckRender(){
+  $('#ck-h').textContent = pad2(CK.h); $('#ck-m').textContent = pad2(CK.m);
+  $('#ck-h').classList.toggle('on', CK.mode === 'h'); $('#ck-m').classList.toggle('on', CK.mode === 'm');
+  const R_OUT = 100, R_IN = 66;
+  let sel, selR, items = '';
+  if (CK.mode === 'h'){
+    const inner = CK.h === 0 || CK.h > 12;
+    sel = CK.h % 12; selR = inner ? R_IN : R_OUT;
+    for (let k = 0; k < 12; k++){
+      const [x, y] = ckPos(k, R_OUT), [xi, yi] = ckPos(k, R_IN);
+      const vo = k === 0 ? 12 : k, vi = k === 0 ? 0 : k + 12;
+      items += `<text class="outer${!inner && sel === k ? ' sel' : ''}" x="${x}" y="${y}">${vo}</text>`;
+      items += `<text class="inner${inner && sel === k ? ' sel' : ''}" x="${xi}" y="${yi}">${pad2(vi)}</text>`;
+    }
+  } else {
+    sel = CK.m / 5; selR = R_OUT;
+    for (let k = 0; k < 12; k++){
+      const [x, y] = ckPos(k, R_OUT);
+      items += `<text class="outer${CK.m === k * 5 ? ' sel' : ''}" x="${x}" y="${y}">${pad2(k * 5)}</text>`;
+    }
+  }
+  const [kx, ky] = ckPos(sel, selR);
+  $('#ck-dial').innerHTML = `<circle class="face" cx="128" cy="128" r="126"/><circle class="knob" cx="128" cy="128" r="4"/>
+    <line class="hand" x1="128" y1="128" x2="${kx}" y2="${ky}"/><circle class="knob" cx="${kx}" cy="${ky}" r="${CK.mode === 'm' && CK.m % 5 ? 6 : 18}"/>${items}`;
+}
+function ckPick(ev){
+  const r = $('#ck-dial').getBoundingClientRect();
+  const s = 256 / r.width, dx = (ev.clientX - r.left) * s - 128, dy = (ev.clientY - r.top) * s - 128;
+  let deg = Math.atan2(dx, -dy) * 180 / Math.PI; if (deg < 0) deg += 360;
+  if (CK.mode === 'h'){
+    const k = Math.round(deg / 30) % 12, inner = Math.hypot(dx, dy) < 83;
+    CK.h = inner ? (k === 0 ? 0 : k + 12) : (k === 0 ? 12 : k);
+  } else CK.m = Math.round(deg / 6) % 60;
+  ckRender();
+}
+function openClock(input){
+  CK.input = input;
+  const v = /^(\d{2}):(\d{2})$/.exec(input.value || '');
+  const now = new Date();
+  CK.h = v ? +v[1] : now.getHours(); CK.m = v ? +v[2] : Math.round(now.getMinutes() / 5) * 5 % 60;
+  CK.mode = 'h'; $('#clock').classList.remove('typing');
+  ckRender(); $('#clock').classList.add('show'); $('#ck-set').focus();
+}
+function closeClock(){ $('#clock').classList.remove('show'); if (CK.input) CK.input.focus(); CK.input = null; }
+function ckFromTyping(){
+  if (!$('#clock').classList.contains('typing')) return true;
+  const hh = parseInt($('#ck-th').value, 10), mm = parseInt($('#ck-tm').value || '0', 10);
+  if (!(hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59)){ toast('שעה לא תקינה: שעות 0–23, דקות 0–59'); return false; }
+  CK.h = hh; CK.m = mm; return true;
+}
+$('#ck-dial').addEventListener('pointerdown', e => { CK.drag = true; $('#ck-dial').setPointerCapture(e.pointerId); ckPick(e); });
+$('#ck-dial').addEventListener('pointermove', e => { if (CK.drag) ckPick(e); });
+$('#ck-dial').addEventListener('pointerup', e => { if (!CK.drag) return; CK.drag = false; ckPick(e); if (CK.mode === 'h'){ CK.mode = 'm'; ckRender(); } });
+$('#ck-h').addEventListener('click', () => { CK.mode = 'h'; ckRender(); });
+$('#ck-m').addEventListener('click', () => { CK.mode = 'm'; ckRender(); });
+$('#ck-kbd').addEventListener('click', () => {
+  const c = $('#clock');
+  if (c.classList.toggle('typing')){ $('#ck-th').value = pad2(CK.h); $('#ck-tm').value = pad2(CK.m); $('#ck-th').focus(); $('#ck-th').select(); }
+  else { if (ckFromTyping()) ckRender(); }
+});
+$('#ck-cancel').addEventListener('click', closeClock);
+$('#ck-clear').addEventListener('click', () => { CK.input.value = ''; closeClock(); });
+$('#ck-set').addEventListener('click', () => { if (!ckFromTyping()) return; CK.input.value = pad2(CK.h) + ':' + pad2(CK.m); closeClock(); });
+$('#clock').addEventListener('click', e => { if (e.target.id === 'clock') closeClock(); });
+$('#clock').addEventListener('keydown', e => {
+  if (e.key === 'Escape'){ e.preventDefault(); closeClock(); }
+  else if (e.key === 'Enter' && e.target.tagName !== 'BUTTON'){ e.preventDefault(); $('#ck-set').click(); }
+});
+for (const id of ['depT', 'arrT']){
+  const el = fx(id);
+  el.addEventListener('click', () => openClock(el));
+  el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown'){ e.preventDefault(); openClock(el); } });
+}
+
 /* intermediate landings (placed between departure and arrival) */
 let viaSeq = 0;
 function addVia(value){
@@ -1241,8 +1364,8 @@ const IMPORT_FIELDS = [
   {k:'dep', label:'מקום המראה', g:['departure', 'from', 'origin']},
   {k:'arr', label:'מקום נחיתה', g:['destination', 'to', 'arrival']},
   {k:'route', label:'מסלול (יתווסף להערות)', g:['route']},
-  {k:'tOut', label:'שעת המראה', g:['time out', 'out', 'off', 'takeoff', 'departure time']},
-  {k:'tIn', label:'שעת נחיתה', g:['time in', 'in', 'on', 'landing time', 'arrival time']},
+  {k:'tOut', label:'שעת המראה', g:['flight start time', 'start time', 'time out', 'out', 'off', 'takeoff', 'departure time']},
+  {k:'tIn', label:'שעת נחיתה', g:['flight stop time', 'stop time', 'end time', 'time in', 'in', 'on', 'landing time', 'arrival time']},
   {k:'total', label:'זמן טיסה כולל', req:true, g:['duration', 'total time', 'total flight time', 'total']},
   {k:'pic', label:'זמן PIC', g:['pic', 'pic time']},
   {k:'cop', label:'זמן טייס משנה (SIC)', g:['sic', 'sic time', 'co-pilot', 'copilot']},
@@ -1278,22 +1401,27 @@ $('#csvFile').addEventListener('change', async e => {
   const text = await file.text();
   const rows = parseCSV(text);
   if (rows.length < 2){ $('#mapArea').innerHTML = '<div class="banner">לא נמצאו שורות נתונים בקובץ.</div>'; CSV = null; return; }
-  CSV = {headers: rows[0], rows: rows.slice(1), map: guessMapping(rows[0])};
+  CSV = {headers: rows[0], rows: rows.slice(1), map: guessMapping(rows[0]), fileName: file.name};
   renderMapping();
 });
 $('#csvDateFmt').addEventListener('change', () => { if (CSV) renderMapping(); });
 function colVal(row, k){ const i = CSV.map[k]; return i == null ? '' : (row[i] ?? '').trim(); }
 function buildImport(){
   let fmt = $('#csvDateFmt').value;
-  if (fmt === 'auto') fmt = detectDateFmt(CSV.rows.map(r => colVal(r, 'date')));
+  if (fmt === 'auto'){
+    const head = CSV.map.date != null ? String(CSV.headers[CSV.map.date] || '').toLowerCase() : '';
+    fmt = /mm\W?dd/.test(head) ? 'MDY' : /dd\W?mm/.test(head) ? 'DMY' : detectDateFmt(CSV.rows.map(r => colVal(r, 'date')));
+  }
   const existing = new Set(S.flights.map(dupKey));
   const acByReg = new Map(S.aircraft.map(a => [a.registration.toUpperCase(), a]));
-  const newAc = [], flights = []; let bad = 0, dup = 0;
+  const newAc = [], flights = []; let bad = 0, dup = 0, badTime = 0;
   for (const r of CSV.rows){
     const date = parseDate(colVal(r, 'date'), fmt);
     if (!date){ bad++; continue; }
     const depT = hhmm(colVal(r, 'tOut')), arrT = hhmm(colVal(r, 'tIn'));
-    const total = parseDur(colVal(r, 'total')) || diffTimes(depT, arrT);
+    const totalRaw = parseDurStrict(colVal(r, 'total'));
+    if (totalRaw == null || totalRaw > 24 * 60){ badTime++; continue; }
+    const total = totalRaw || diffTimes(depT, arrT);
     const reg = colVal(r, 'reg').toUpperCase();
     let a = reg ? acByReg.get(reg) : null;
     const catRaw = colVal(r, 'cat');
@@ -1319,7 +1447,7 @@ function buildImport(){
     if (existing.has(key)){ dup++; continue; }
     existing.add(key); flights.push(f);
   }
-  return {fmt, flights, newAc, bad, dup};
+  return {fmt, flights, newAc, bad, dup, badTime};
 }
 function renderMapping(){
   const opts = '<option value="">— לא לייבא —</option>' + CSV.headers.map((h, i) => `<option value="${i}">${esc(h || ('עמודה ' + (i + 1)))}</option>`).join('');
@@ -1335,6 +1463,8 @@ function renderMapping(){
     <div class="tablewrap"><table class="preview"><thead><tr><th>תאריך</th><th>רישום</th><th>מ-</th><th>אל</th><th>כולל</th><th>PIC</th><th>Dual</th><th>לילה</th><th>נחיתות</th></tr></thead><tbody>
       ${prev.map(f => `<tr><td class="num">${fmtDateHe(f.date)}</td><td class="mono">${esc(f.reg)}</td><td class="mono">${esc(f.dep)}</td><td class="mono">${esc(f.arr)}</td><td class="num">${fmtDur(f.total)}</td><td class="num">${fmtDur(f.pic)}</td><td class="num">${fmtDur(f.dual)}</td><td class="num">${fmtDur(f.night)}</td><td class="num">${f.ldgD + f.ldgN}</td></tr>`).join('') || '<tr><td colspan="9">אין שורות תקינות לייבוא</td></tr>'}
     </tbody></table></div>
+    ${CSV.headers.length < 3 ? '<div class="banner">הקובץ נקרא כעמודה אחת או שתיים בלבד. כנראה המפריד בין העמודות לא זוהה. בדוק שבחרת את הקובץ הנכון, ושלח לי את שורת הכותרות.</div>' : ''}
+    ${res.badTime ? `<div class="banner">${res.badTime} שורות דולגו כי בעמודת זמן הטיסה אין זמן תקין (למשל תאריך או טקסט, או יותר מ-24 שעות). בדוק שהשדה "זמן טיסה כולל" משויך לעמודה הנכונה.</div>` : ''}
     <div class="banner info">ייובאו ${res.flights.length} טיסות${res.newAc.length ? `, ויתווספו ${res.newAc.length} כלי טיס חדשים לספרייה` : ''}.${res.dup ? ` ${res.dup} טיסות כבר קיימות ולא ייובאו שוב.` : ''}${res.bad ? ` ${res.bad} שורות דולגו בגלל תאריך לא תקין.` : ''}</div>
     <div class="row"><button class="primary" id="doImport" ${res.flights.length ? '' : 'disabled'}>ייבא ${res.flights.length} טיסות</button></div>`;
   document.querySelectorAll('[data-map]').forEach(s => {
@@ -1347,8 +1477,12 @@ async function doImport(){
   const res = buildImport();
   if (CSV.map.date == null || CSV.map.total == null){ toast('יש לשייך עמודה לתאריך ולזמן הטיסה הכולל'); return; }
   if (!await confirmBox(`לייבא ${res.flights.length} טיסות ללוגבוק?`, 'ייבא')) return;
+  const batch = 'imp' + Date.now().toString(36);
+  for (const f of res.flights) f.imp = batch;
+  for (const a of res.newAc) a.imp = batch;
   S.aircraft = [...S.aircraft, ...res.newAc];
   S.flights = [...S.flights, ...res.flights];
+  S.settings = Object.assign({}, S.settings, {imports: [...(S.settings.imports || []), {id: batch, name: CSV.fileName || 'CSV', date: new Date().toISOString(), count: res.flights.length}]});
   const keys = [...new Set(res.flights.map(f => monthKey(f.date)))];
   $('#doImport').disabled = true;
   toast('שומר את הטיסות…', 10000);
@@ -1357,6 +1491,36 @@ async function doImport(){
   CSV = null; $('#mapArea').innerHTML = ''; $('#csvFile').value = '';
   location.hash = 'logbook'; render();
 }
+
+/* ----- bulk delete and import history ----- */
+$('#bulkDel').addEventListener('click', async () => {
+  const list = filtered(); if (!list.length) return;
+  const ids = new Set(list.map(f => f.id));
+  const filteredNow = Object.values(F).some(Boolean);
+  if (!await confirmBox(`למחוק ${list.length} טיסות${filteredNow ? ' שמתאימות לסינון הנוכחי' : ', כלומר את כל הלוגבוק'}? המחיקה תסתנכרן גם ל-Google Drive, ואי אפשר לבטל אותה. כדאי לשמור קודם קובץ גיבוי.`, 'מחק')) return;
+  S.flights = S.flights.filter(f => !ids.has(f.id));
+  persist(); toast(`נמחקו ${ids.size} טיסות`); render();
+});
+function renderImports(){
+  const el = $('#impList');
+  const imps = [...(S.settings.imports || [])].reverse();
+  if (!imps.length){ el.innerHTML = '<div class="empty">עוד לא נשמרו כאן ייבואים. ייבואים שנעשו לפני העדכון הזה לא מופיעים ברשימה. כדי למחוק אותם, סנן ביומן לפי תקופה והשתמש בכפתור המחיקה שבתיבת הסינון.</div>'; return; }
+  el.innerHTML = imps.map(i => {
+    const n = S.flights.filter(f => f.imp === i.id).length;
+    return `<div class="item"><div class="meta"><strong>${esc(i.name)}</strong><span class="note">${esc(fmtTime(i.date))} · יובאו ${i.count} טיסות · נשארו ${n}</span></div>
+      <div class="acts">${n ? `<button class="small danger" data-delimp="${esc(i.id)}">מחק את ${n} הטיסות מהייבוא הזה</button>` : '<span class="chip mute">נמחק</span>'}</div></div>`;
+  }).join('');
+}
+$('#impList').addEventListener('click', async e => {
+  const b = e.target.closest('[data-delimp]'); if (!b) return;
+  const id = b.dataset.delimp;
+  const n = S.flights.filter(f => f.imp === id).length;
+  if (!await confirmBox(`למחוק ${n} טיסות שהגיעו מהייבוא הזה? טיסות שהוספת ידנית לא יימחקו.`, 'מחק')) return;
+  S.flights = S.flights.filter(f => f.imp !== id);
+  const used = new Set(S.flights.map(f => f.acId));
+  S.aircraft = S.aircraft.filter(a => a.imp !== id || used.has(a.id));
+  persist(); toast(`נמחקו ${n} טיסות`); render();
+});
 
 /* ----- export / backup ----- */
 function downloadFile(filename, data, type){
