@@ -178,7 +178,8 @@ tfoot td{font-weight:700;background:var(--bg)}
 #clock .foot .sp{flex:1}
 #clock .foot button{border:0;background:none;color:var(--accent);font-weight:700;padding:8px 10px}
 #clock .foot button.icon{color:var(--muted);font-size:1.2rem}
-#modal .box{background:var(--solid);border-radius:12px;padding:18px;max-width:420px;width:100%;display:grid;gap:14px}
+#modal .box{background:var(--solid);border-radius:12px;padding:18px;max-width:420px;width:100%;display:grid;gap:14px;max-height:calc(100vh - 32px);grid-template-rows:minmax(0,1fr) auto auto}
+#modalText{overflow:auto;min-height:0;overflow-wrap:anywhere}
 .map-table td,.map-table th{text-align:right}
 .map-table select{min-width:180px}
 .preview td{font-size:.8rem;white-space:nowrap}
@@ -227,7 +228,7 @@ tfoot td{font-weight:700;background:var(--bg)}
 </head>
 <body>
 <header class="top"><div class="wrap">
-  <div class="brand"><h1>לוגבוק טיסות</h1><small>גרסה 2.1 · 23.11.2026</small></div>
+  <div class="brand"><h1>לוגבוק טיסות</h1><small>גרסה 2.2 · 23.11.2026</small></div>
   <button type="button" class="status" id="status" data-s="loading">טוען…</button>
 </div></header>
 <nav class="tabs" aria-label="תפריט"><div class="wrap">
@@ -1331,10 +1332,10 @@ function planAircraftSync(){
 $('#acSync').addEventListener('click', async () => {
   const p = planAircraftSync();
   if (!p.remove.length && !p.merge.length && !p.add.length && !p.relink){ toast('הספרייה כבר תואמת את יומן הטיסות'); return; }
-  const lines = [];
-  if (p.remove.length) lines.push(`יוסרו ${p.remove.length} כלי טיס שאין להם טיסות ביומן: ${p.remove.map(a => a.registration).join(', ')}.`);
-  if (p.merge.length) lines.push(`יאוחדו ${p.merge.length} רישומים כפולים: ${p.merge.map(a => a.registration).join(', ')}.`);
-  if (p.add.length) lines.push(`יתווספו ${p.add.length} כלי טיס שמופיעים בטיסות: ${p.add.map(a => a.registration).join(', ')}.`);
+  const lines = [], few = l => l.length > 10 ? l.slice(0, 10).join(', ') + ` ועוד ${l.length - 10}` : l.join(', ');
+  if (p.remove.length) lines.push(`יוסרו ${p.remove.length} כלי טיס שאין להם טיסות ביומן: ${few(p.remove.map(a => a.registration))}.`);
+  if (p.merge.length) lines.push(`יאוחדו ${p.merge.length} רישומים כפולים: ${few(p.merge.map(a => a.registration))}.`);
+  if (p.add.length) lines.push(`יתווספו ${p.add.length} כלי טיס שמופיעים בטיסות: ${few(p.add.map(a => a.registration))}.`);
   if (p.relink) lines.push(`${p.relink} טיסות יקושרו מחדש לכלי הטיס הנכון לפי הרישום.`);
   if (!await confirmBox(lines.join(' ') + ' הטיסות עצמן לא ישתנו. להמשיך?', 'התאם')) return;
   S.aircraft = [...p.keep.values(), ...p.add];
