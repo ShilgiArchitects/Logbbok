@@ -227,7 +227,7 @@ tfoot td{font-weight:700;background:var(--bg)}
 </head>
 <body>
 <header class="top"><div class="wrap">
-  <div class="brand"><h1>לוגבוק טיסות</h1><small>גרסה 1.9 · 23.11.2026</small></div>
+  <div class="brand"><h1>לוגבוק טיסות</h1><small>גרסה 2.1 · 23.11.2026</small></div>
   <button type="button" class="status" id="status" data-s="loading">טוען…</button>
 </div></header>
 <nav class="tabs" aria-label="תפריט"><div class="wrap">
@@ -384,7 +384,10 @@ tfoot td{font-weight:700;background:var(--bg)}
       </form>
     </div>
     <div class="card">
-      <h2>כלי הטיס שלי</h2>
+      <div class="row" style="justify-content:space-between;align-items:center">
+        <h2>כלי הטיס שלי</h2>
+        <button type="button" class="small" id="acSync">התאם את הספרייה ליומן הטיסות</button>
+      </div>
       <div class="list" id="acList"></div>
     </div>
   </section>
@@ -438,7 +441,7 @@ tfoot td{font-weight:700;background:var(--bg)}
                 <option value="">בחר…</option><option>טייס פרטי (PPL)</option><option>טייס פרטי מסוק (PPL(H))</option><option>טייס מסחרי (CPL)</option><option>טייס תובלה (ATPL)</option><option>טייס מז"מ</option><option>טייס דאון</option><option>אחר</option></select></div>
               <div class="field"><label for="pf-licNo">מספר רישיון</label><input id="pf-licNo" class="ltr"></div>
               <div class="field"><label for="pf-licIssued">תאריך הנפקה</label><input type="date" id="pf-licIssued"></div>
-              <div class="field"><label for="pf-licExp">תוקף רישיון</label><input type="date" id="pf-licExp"></div>
+              <div class="field"><label for="pf-checkExp">תוקף מבחן רמה</label><input type="date" id="pf-checkExp"></div>
               <div class="field" style="grid-column:span 2"><label for="pf-ratings">הגדרים</label><input id="pf-ratings" placeholder="למשל SEP, לילה, IR"></div>
             </div>
           </fieldset>
@@ -452,7 +455,7 @@ tfoot td{font-weight:700;background:var(--bg)}
           <div class="field"><label for="pf-notes">הערות</label><textarea id="pf-notes"></textarea></div>
           <div class="row">
             <button type="submit" class="primary">שמור פרופיל</button>
-            <button type="button" id="pf-rem">צור תזכורות לתוקף הרישיון והתעודה הרפואית</button>
+            <button type="button" id="pf-rem">צור תזכורות למבחן הרמה ולתעודה הרפואית</button>
           </div>
         </div>
       </form>
@@ -996,7 +999,7 @@ function renderPilotBar(){
   el.innerHTML = `<strong>${esc(p.name || p.nameEn || '')}</strong>
     ${p.licType || p.licNo ? `<span>${esc(p.licType || 'רישיון')} <span class="mono">${esc(p.licNo || '')}</span></span>` : ''}
     ${p.ratings ? `<span>הגדרים: ${esc(p.ratings)}</span>` : ''}
-    ${exp('תוקף רישיון', p.licExp)}${exp('רפואי ' + (p.medClass || ''), p.medExp)}
+    ${exp('מבחן רמה', p.checkExp || p.licExp)}${exp('רפואי ' + (p.medClass || ''), p.medExp)}
     <a href="#settings" class="note">עריכה</a>`;
 }
 function renderLogbook(){
@@ -1300,6 +1303,50 @@ $('#flightForm').addEventListener('submit', e => {
 const ax = id => $('#ac-' + id);
 ax('cat').innerHTML = Object.entries(CATS).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join('');
 ax('cat').addEventListener('change', () => { if (ax('cat').value === 'glider') ax('eng').value = 'NONE'; });
+/** Aircraft created by an import and no longer flown in any flight. */
+function dropUnusedImportedAircraft(){
+  const used = new Set(S.flights.map(f => f.acId));
+  S.aircraft = S.aircraft.filter(a => !a.imp || used.has(a.id));
+}
+/** Plan: library = exactly the registrations that appear in the flights. */
+function planAircraftSync(){
+  const norm = r => String(r || '').trim().toUpperCase();
+  const byReg = new Map();
+  for (const f of S.flights){ const r = norm(f.reg); if (!r) continue; const e = byReg.get(r) || {n: 0, f}; e.n++; if ((f.date || '') > (e.f.date || '')) e.f = f; byReg.set(r, e); }
+  const keep = new Map(), remove = [], merge = [];
+  for (const a of S.aircraft){
+    const r = norm(a.registration);
+    if (!byReg.has(r)){ remove.push(a); continue; }
+    if (keep.has(r)){ merge.push(a); continue; }
+    keep.set(r, a);
+  }
+  const add = [];
+  for (const [r, e] of byReg) if (!keep.has(r)){
+    const t = e.f.acType || '', sp = t.indexOf(' ');
+    add.push({id: newId(), registration: r, category: e.f.cat || 'airplane', engine: e.f.engine || 'SE', manufacturer: sp > 0 ? t.slice(0, sp) : '', model: sp > 0 ? t.slice(sp + 1) : t});
+  }
+  const relink = S.flights.filter(f => { const a = keep.get(norm(f.reg)); return a && f.acId !== a.id; }).length;
+  return {byReg, keep, remove, merge, add, relink};
+}
+$('#acSync').addEventListener('click', async () => {
+  const p = planAircraftSync();
+  if (!p.remove.length && !p.merge.length && !p.add.length && !p.relink){ toast('הספרייה כבר תואמת את יומן הטיסות'); return; }
+  const lines = [];
+  if (p.remove.length) lines.push(`יוסרו ${p.remove.length} כלי טיס שאין להם טיסות ביומן: ${p.remove.map(a => a.registration).join(', ')}.`);
+  if (p.merge.length) lines.push(`יאוחדו ${p.merge.length} רישומים כפולים: ${p.merge.map(a => a.registration).join(', ')}.`);
+  if (p.add.length) lines.push(`יתווספו ${p.add.length} כלי טיס שמופיעים בטיסות: ${p.add.map(a => a.registration).join(', ')}.`);
+  if (p.relink) lines.push(`${p.relink} טיסות יקושרו מחדש לכלי הטיס הנכון לפי הרישום.`);
+  if (!await confirmBox(lines.join(' ') + ' הטיסות עצמן לא ישתנו. להמשיך?', 'התאם')) return;
+  S.aircraft = [...p.keep.values(), ...p.add];
+  const byReg = new Map(S.aircraft.map(a => [a.registration.toUpperCase(), a]));
+  S.flights = S.flights.map(f => {
+    const a = byReg.get(String(f.reg || '').trim().toUpperCase());
+    return a && f.acId !== a.id ? Object.assign({}, f, {acId: a.id}) : f;
+  });
+  if (S.settings.lastAircraftId && !S.aircraft.some(a => a.id === S.settings.lastAircraftId)) S.settings = Object.assign({}, S.settings, {lastAircraftId: ''});
+  persist(); render(); toast(`הספרייה עודכנה: ${S.aircraft.length} כלי טיס`);
+});
+
 function renderAircraft(){
   const el = $('#acList');
   if (S.mode === 'loading'){ el.innerHTML = '<div class="empty">טוען…</div>'; return; }
@@ -1400,10 +1447,11 @@ $('#remForm').addEventListener('submit', e => {
 });
 
 /* ----- pilot profile ----- */
-const PF = ['name', 'nameEn', 'picName', 'licType', 'licNo', 'licIssued', 'licExp', 'ratings', 'medClass', 'medExp', 'notes'];
+const PF = ['name', 'nameEn', 'picName', 'licType', 'licNo', 'licIssued', 'checkExp', 'ratings', 'medClass', 'medExp', 'notes'];
 let pfDirty = false;
 function fillProfileForm(){
-  for (const k of PF) $('#pf-' + k).value = (S.profile || {})[k] || '';
+  const pr = S.profile || {};
+  for (const k of PF) $('#pf-' + k).value = (k === 'checkExp' ? pr.checkExp || pr.licExp : pr[k]) || ''; /* the old licence-expiry date moves to the check date */
   pfDirty = false;
 }
 $('#pfForm').addEventListener('input', () => { pfDirty = true; });
@@ -1411,7 +1459,7 @@ function readProfileForm(){
   const p = {};
   for (const k of PF) p[k] = $('#pf-' + k).value.trim();
   if (p.licNo) p.licNo = p.licNo.toUpperCase();
-  return p;
+  return p; /* licExp is no longer kept */
 }
 $('#pfForm').addEventListener('submit', e => {
   e.preventDefault();
@@ -1421,14 +1469,14 @@ $('#pfForm').addEventListener('submit', e => {
 $('#pf-rem').addEventListener('click', () => {
   const p = readProfileForm();
   const want = [];
-  if (p.licExp) want.push({type: 'license', title: 'תוקף רישיון טיס' + (p.licType ? ' – ' + p.licType : ''), date: p.licExp, lead: 60});
+  if (p.checkExp) want.push({type: 'check', title: 'מבחן רמה' + (p.licType ? ' – ' + p.licType : ''), date: p.checkExp, lead: 60});
   if (p.medExp) want.push({type: 'medical', title: 'חידוש תעודה רפואית' + (p.medClass ? ' ' + p.medClass : ''), date: p.medExp, lead: 45});
-  if (!want.length){ toast('יש למלא תאריך תוקף לרישיון או לתעודה הרפואית'); return; }
+  if (!want.length){ toast('יש למלא תאריך תוקף למבחן הרמה או לתעודה הרפואית'); return; }
   let added = 0, updated = 0;
   for (const w of want){
-    const ex = S.reminders.find(r => r.type === w.type && r.auto);
+    const ex = S.reminders.find(r => r.auto && (r.type === w.type || (w.type === 'check' && r.type === 'license')));
     if (ex){
-      if (ex.date !== w.date || ex.title !== w.title){ S.reminders = S.reminders.map(r => r === ex ? Object.assign({}, r, {date: w.date, title: w.title, gcal: ex.date === w.date ? r.gcal : false}) : r); updated++; }
+      if (ex.date !== w.date || ex.title !== w.title || ex.type !== w.type){ S.reminders = S.reminders.map(r => r === ex ? Object.assign({}, r, {type: w.type, date: w.date, title: w.title, gcal: ex.date === w.date ? r.gcal : false}) : r); updated++; }
     } else { S.reminders = [...S.reminders, Object.assign({id: newId(), notes: '', auto: true, gcal: false}, w)]; added++; }
   }
   S.profile = p; pfDirty = false;
@@ -1619,6 +1667,7 @@ $('#bulkDel').addEventListener('click', async () => {
   if (!await confirmBox(`למחוק ${list.length} טיסות${filteredNow ? ' שמתאימות לסינון הנוכחי' : ', כלומר את כל הלוגבוק'}? המחיקה תסתנכרן גם ל-Google Drive, ואי אפשר לבטל אותה. כדאי לשמור קודם קובץ גיבוי.`, 'מחק')) return;
   if (list.length > 1 && !await confirmBox(`אישור נוסף: למחוק לצמיתות ${list.length} טיסות?`, 'כן, מחק')) return;
   S.flights = S.flights.filter(f => !ids.has(f.id));
+  dropUnusedImportedAircraft();
   persist(); toast(`נמחקו ${ids.size} טיסות`); render();
 });
 function renderImports(){
@@ -1680,7 +1729,8 @@ function exportPdf(){
     <h1>PILOT LOGBOOK<small>ספר טיסות</small></h1>
     <table class="pp-info">
       <tr><th>Name<small>שם</small></th><td>${esc(p.name || '')}${p.nameEn ? ' · ' + esc(p.nameEn) : ''}</td></tr>
-      <tr><th>Licence<small>רישיון</small></th><td>${esc(p.licType || '')} ${p.licNo ? '· ' + esc(p.licNo) : ''}${p.licExp ? ' · valid until ' + fmtDateHe(p.licExp) : ''}</td></tr>
+      <tr><th>Licence<small>רישיון</small></th><td>${esc(p.licType || '')} ${p.licNo ? '· ' + esc(p.licNo) : ''}</td></tr>
+      <tr><th>Proficiency check<small>מבחן רמה</small></th><td>${(p.checkExp || p.licExp) ? 'valid until ' + fmtDateHe(p.checkExp || p.licExp) : ''}</td></tr>
       <tr><th>Ratings<small>הגדרים</small></th><td>${esc(p.ratings || '')}</td></tr>
       <tr><th>Medical<small>תעודה רפואית</small></th><td>${esc(p.medClass || '')}${p.medExp ? ' · valid until ' + fmtDateHe(p.medExp) : ''}</td></tr>
       <tr><th>Period<small>תקופה</small></th><td>${fmtDateHe(list[0].date)} – ${fmtDateHe(list[list.length - 1].date)} · ${list.length} flights${filterText() ? ' · ' + esc(filterText()) : ''}</td></tr>
