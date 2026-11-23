@@ -661,7 +661,9 @@ function canon(d){
 /* ---------- Google sign-in and Drive sync ---------- */
 const SCOPES = 'https://www.googleapis.com/auth/drive.appdata openid email';
 const DATA_FILE = 'logbook-data.json';
-let tokenClient = null, accessToken = null, tokenExp = 0, sessionEmail = '', pendingAuth = null;
+let tokenClient = null, accessToken = null, tokenExp = 0, sessionEmail = '', pendingAuth = null, forceConsent = false;
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
+const SCOPE_MSG = 'Google לא נתנה גישה ל-Drive. לחץ כדי להתחבר שוב, ובחלון של Google סמן את התיבה של Google Drive.';
 let syncing = false, syncAgain = false, syncTimer = null, lastSyncErr = '';
 
 const cfgClientId = () => String((window.LOGBOOK_CONFIG && window.LOGBOOK_CONFIG.googleClientId) || '').trim();
@@ -677,6 +679,10 @@ function ensureTokenClient(){
     callback: resp => {
       const p = pendingAuth; pendingAuth = null;
       if (!resp || resp.error){ if (p) p.reject(resp || {}); return; }
+      let ok = true;
+      try { ok = google.accounts.oauth2.hasGrantedAllScopes(resp, DRIVE_SCOPE); } catch(e){}
+      if (!ok){ forceConsent = true; accessToken = null; lastSyncErr = SCOPE_MSG; updateStatus(); if (p) p.reject({type: 'scope'}); return; }
+      forceConsent = false;
       accessToken = resp.access_token; tokenExp = Date.now() + ((+resp.expires_in || 3600) - 60) * 1000;
       if (p) p.resolve();
     },
@@ -691,7 +697,7 @@ function requestToken(selectAccount){
     if (!tc){ reject({type: configured() ? 'gis_not_loaded' : 'not_configured'}); return; }
     if (pendingAuth) pendingAuth.reject({type: 'superseded'});
     pendingAuth = {resolve, reject};
-    const opts = {prompt: selectAccount ? 'select_account' : ''};
+    const opts = {prompt: forceConsent ? 'consent' : (selectAccount ? 'select_account' : '')};
     if (META.owner && !selectAccount) opts.login_hint = META.owner;
     tc.requestAccessToken(opts);
   });
@@ -764,6 +770,8 @@ async function syncNow(){
   } catch(e){
     if (e.type === 'auth') lastSyncErr = 'החיבור ל-Google פג. לחץ כדי להתחבר שוב.';
     else if (e.type === 'network') lastSyncErr = 'אין חיבור לאינטרנט. השינויים יסונכרנו כשהחיבור יחזור.';
+    else if (e.type === 'http' && e.status === 403 && /scope/i.test(e.message || '')){ forceConsent = true; accessToken = null; lastSyncErr = SCOPE_MSG; }
+    else if (e.type === 'http' && e.status === 403 && /not been used|disabled/i.test(e.message || '')) lastSyncErr = 'Google Drive API לא מופעל בפרויקט ב-Google Cloud. ראה שלב 2 במדריך.';
     else if (e.type === 'http' && e.status === 403) lastSyncErr = 'Google סירבה לגישה (' + (e.message || '403') + ').';
     else lastSyncErr = 'הסנכרון נכשל' + (e.message ? ': ' + e.message : '') + '.';
   } finally {
@@ -790,7 +798,7 @@ async function connectGoogle(selectAccount){
   if (!navigator.onLine){ toast('אין חיבור לאינטרנט'); return; }
   if (!gisReady()){ toast('רכיב ההתחברות של Google עוד נטען. נסה שוב בעוד רגע.'); return; }
   try { await requestToken(selectAccount); }
-  catch(e){ if (e && e.type !== 'superseded') toast('ההתחברות ל-Google לא הושלמה'); updateStatus(); return; }
+  catch(e){ if (e && e.type === 'scope') toast(SCOPE_MSG, 7000); else if (e && e.type !== 'superseded') toast('ההתחברות ל-Google לא הושלמה'); updateStatus(); return; }
   sessionEmail = '';
   await syncNow();
   if (!lastSyncErr) toast('מחובר ל-Google Drive: ' + (META.owner || ''), 3500);
