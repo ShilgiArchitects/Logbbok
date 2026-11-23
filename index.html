@@ -188,11 +188,46 @@ tfoot td{font-weight:700;background:var(--bg)}
   .tile .v{font-size:1.2rem}
 }
 @media (prefers-reduced-motion: reduce){ #toast{transition:none} }
+#printArea{display:none}
+@media print{
+  @page{size:A4 landscape;margin:8mm}
+  html,body{background:#fff !important}
+  body::before{display:none !important}
+  header.top,nav.tabs,main,#toast,#modal,#clock{display:none !important}
+  #printArea{display:block;color:#000;font-family:var(--font-body)}
+  .pp{page-break-after:always;break-after:page}
+  .pp:last-child{page-break-after:auto;break-after:auto}
+  .pp-head{display:flex;justify-content:space-between;direction:ltr;font-size:8pt;border-bottom:.6pt solid #000;padding-bottom:1.5mm;margin-bottom:2mm}
+  table.lb{width:100%;border-collapse:collapse;table-layout:fixed;direction:ltr;font-size:7.2pt;line-height:1.15}
+  table.lb th,table.lb td{border:.4pt solid #444;padding:.6mm .8mm;text-align:center;vertical-align:middle;overflow:hidden}
+  table.lb th{font-size:6.4pt;font-weight:700;background:#eef2f6}
+  table.lb small{display:block;font-weight:400;font-size:5.8pt;color:#333}
+  table.lb tr.no th{font-size:6pt;background:#fff;color:#555;font-weight:400;padding:.2mm}
+  table.lb tr.r td{height:6.3mm}
+  table.lb td.tl{text-align:left}
+  table.lb td.rm{font-size:6.3pt;line-height:1.1;text-align:left;direction:auto}
+  table.lb td.rm span{font-weight:700}
+  table.lb tfoot td{font-weight:700;background:#f3f5f7;height:5.6mm}
+  table.lb tfoot tr.t3 td{background:#e3e9ef;border-top:.9pt solid #000}
+  table.lb td.lbl{text-align:left}
+  table.lb td.lbl small{display:inline;margin-left:2mm}
+  .pp-sign{display:flex;justify-content:space-between;direction:ltr;font-size:7.5pt;margin-top:3mm}
+  .cover h1{font-size:26pt;text-align:center;margin:8mm 0 7mm;letter-spacing:.06em}
+  .cover h1 small{display:block;font-size:16pt;letter-spacing:0;margin-top:2mm}
+  .pp-info{margin:0 auto 7mm;border-collapse:collapse;font-size:10.5pt;min-width:60%;direction:ltr}
+  .pp-info th{text-align:left;padding:1.4mm 6mm 1.4mm 0;width:30%;vertical-align:top}
+  .pp-info td{padding:1.4mm 0;border-bottom:.4pt solid #999}
+  .pp-info small,.pp-sum small{display:block;font-weight:400;font-size:8pt;color:#444}
+  .pp-sum{margin:0 auto;border-collapse:collapse;font-size:10.5pt;direction:ltr}
+  .pp-sum th,.pp-sum td{border:.5pt solid #444;padding:2mm 4mm;text-align:center}
+  .pp-sum th{background:#eef2f6}
+  .pp-note{text-align:center;font-size:8pt;color:#444;margin-top:6mm;direction:ltr}
+}
 </style>
 </head>
 <body>
 <header class="top"><div class="wrap">
-  <div class="brand"><h1>לוגבוק טיסות</h1><small>גרסה 1.7 · 23.11.2026</small></div>
+  <div class="brand"><h1>לוגבוק טיסות</h1><small>גרסה 1.8 · 23.11.2026</small></div>
   <button type="button" class="status" id="status" data-s="loading">טוען…</button>
 </div></header>
 <nav class="tabs" aria-label="תפריט"><div class="wrap">
@@ -225,6 +260,7 @@ tfoot td{font-weight:700;background:var(--bg)}
           <button class="small" data-preset="year">השנה</button>
           <button class="small" data-preset="12m">12 חודשים</button>
           <button class="small" data-preset="all">הכול</button>
+          <button class="small" id="exPdf2" type="button">PDF של הטיסות המסוננות</button>
           <button class="small danger" id="bulkDel" type="button" hidden></button>
         </div>
         <div class="grid">
@@ -455,6 +491,7 @@ tfoot td{font-weight:700;background:var(--bg)}
       <div class="row">
         <button id="exCsv">ייצוא הלוגבוק ל-CSV (לאקסל)</button>
         <button id="exJson">שמירת גיבוי מלא (JSON)</button>
+        <button id="exPdf">ייצוא PDF בפורמט ספר טיסות</button>
       </div>
       <div class="row">
         <div class="field"><label for="jsonFile">שחזור מגיבוי JSON</label><input type="file" id="jsonFile" accept=".json,application/json"></div>
@@ -475,6 +512,7 @@ tfoot td{font-weight:700;background:var(--bg)}
   <div class="kbd"><input id="ck-th" type="number" min="0" max="23" inputmode="numeric" aria-label="שעה"><span>:</span><input id="ck-tm" type="number" min="0" max="59" inputmode="numeric" aria-label="דקות"></div>
   <div class="foot"><button type="button" class="icon" id="ck-kbd" title="הקלדה" aria-label="מעבר להקלדה">⌨</button><span class="sp"></span><button type="button" id="ck-clear">Clear</button><button type="button" id="ck-cancel">Cancel</button><button type="button" id="ck-set">Set</button></div>
 </div></div>
+<div id="printArea" aria-hidden="true"></div>
 <div id="toast" role="status" aria-live="polite"></div>
 
 <script>
@@ -1600,6 +1638,92 @@ $('#impList').addEventListener('click', async e => {
   S.aircraft = S.aircraft.filter(a => a.imp !== id || used.has(a.id));
   persist(); toast(`נמחקו ${n} טיסות`); render();
 });
+
+/* ----- PDF in paper-logbook layout (via the browser's "Save as PDF") ----- */
+const PDF_ROWS = 18;
+const SUMK = ['spSE', 'spME', 'mp', 'total', 'ldgD', 'ldgN', 'night', 'ifr', 'pic', 'cop', 'dual', 'instr'];
+const zeroT = () => Object.fromEntries(SUMK.map(k => [k, 0]));
+function addT(t, f){ for (const k of SUMK) t[k] += +f[k] || 0; return t; }
+function filterText(){
+  const parts = [];
+  if (F.from || F.to) parts.push(`${F.from ? fmtDateHe(F.from) : '…'} – ${F.to ? fmtDateHe(F.to) : '…'}`);
+  if (F.cat) parts.push(CATS[F.cat]);
+  if (F.ac) parts.push(F.ac);
+  if (F.func) parts.push({pic: 'PIC', cop: 'טייס משנה', dual: 'בהדרכה', instr: 'מדריך'}[F.func]);
+  if (F.cond) parts.push(F.cond === 'night' ? 'לילה' : 'IFR');
+  if (F.q) parts.push('"' + F.q + '"');
+  return parts.join(' · ');
+}
+function exportPdf(){
+  const list = filtered().slice().sort((a, b) => (a.date + (a.depT || '')).localeCompare(b.date + (b.depT || '')));
+  if (!list.length){ toast('אין טיסות לייצוא לפי הסינון הנוכחי'); return; }
+  const onlyDates = Object.entries(F).every(([k, v]) => !v || k === 'from' || k === 'to');
+  const bf = zeroT();
+  if (onlyDates && F.from) S.flights.filter(f => f.date < F.from).forEach(f => addT(bf, f));
+  const hasBf = SUMK.some(k => bf[k]);
+  const d = m => fmtDur(m), z = m => fmtDur(m, true), n = v => v || '';
+  const p = S.profile || {};
+  const pages = [];
+  for (let i = 0; i < list.length; i += PDF_ROWS) pages.push(list.slice(i, i + PDF_ROWS));
+  const totalPages = pages.length + 1;
+  const all = list.reduce((t, f) => addT(t, f), zeroT());
+  const head = (pg) => `<div class="pp-head"><span>PILOT LOGBOOK · ספר טיסות</span><span>${esc(p.nameEn || p.name || '')}${p.licNo ? ' · ' + esc(p.licNo) : ''}</span><span>Page ${pg} / ${totalPages}</span></div>`;
+  const totRow = (label, he, t, cls) => `<tr class="${cls}"><td colspan="5" class="lbl">${label}<small>${he}</small></td>
+    <td>${z(t.spSE)}</td><td>${z(t.spME)}</td><td>${z(t.mp)}</td><td><b>${z(t.total)}</b></td><td></td>
+    <td>${t.ldgD}</td><td>${t.ldgN}</td><td>${z(t.night)}</td><td>${z(t.ifr)}</td>
+    <td>${z(t.pic)}</td><td>${z(t.cop)}</td><td>${z(t.dual)}</td><td>${z(t.instr)}</td><td></td></tr>`;
+  const cover = `<section class="pp cover">${head(1)}
+    <h1>PILOT LOGBOOK<small>ספר טיסות</small></h1>
+    <table class="pp-info">
+      <tr><th>Name<small>שם</small></th><td>${esc(p.name || '')}${p.nameEn ? ' · ' + esc(p.nameEn) : ''}</td></tr>
+      <tr><th>Licence<small>רישיון</small></th><td>${esc(p.licType || '')} ${p.licNo ? '· ' + esc(p.licNo) : ''}${p.licExp ? ' · valid until ' + fmtDateHe(p.licExp) : ''}</td></tr>
+      <tr><th>Ratings<small>הגדרים</small></th><td>${esc(p.ratings || '')}</td></tr>
+      <tr><th>Medical<small>תעודה רפואית</small></th><td>${esc(p.medClass || '')}${p.medExp ? ' · valid until ' + fmtDateHe(p.medExp) : ''}</td></tr>
+      <tr><th>Period<small>תקופה</small></th><td>${fmtDateHe(list[0].date)} – ${fmtDateHe(list[list.length - 1].date)} · ${list.length} flights${filterText() ? ' · ' + esc(filterText()) : ''}</td></tr>
+    </table>
+    <table class="pp-sum">
+      <tr><th></th><th>Flights<small>טיסות</small></th><th>Total time<small>זמן כולל</small></th><th>PIC</th><th>Dual<small>בהדרכה</small></th><th>Night<small>לילה</small></th><th>IFR</th><th>Landings day / night<small>נחיתות יום / לילה</small></th></tr>
+      <tr><th>This period<small>בתקופה</small></th><td>${list.length}</td><td><b>${z(all.total)}</b></td><td>${z(all.pic)}</td><td>${z(all.dual)}</td><td>${z(all.night)}</td><td>${z(all.ifr)}</td><td>${all.ldgD} / ${all.ldgN}</td></tr>
+      ${hasBf ? `<tr><th>Total to date<small>סה"כ מצטבר</small></th><td></td><td><b>${z(all.total + bf.total)}</b></td><td>${z(all.pic + bf.pic)}</td><td>${z(all.dual + bf.dual)}</td><td>${z(all.night + bf.night)}</td><td>${z(all.ifr + bf.ifr)}</td><td>${all.ldgD + bf.ldgD} / ${all.ldgN + bf.ldgN}</td></tr>` : ''}
+    </table>
+    <p class="pp-note">Times in decimal hours · זמנים בשעות עשרוניות · Generated ${fmtDateHe(todayISO())}</p>
+  </section>`;
+  let prev = Object.assign({}, bf);
+  const body = pages.map((rows, i) => {
+    const pageT = rows.reduce((t, f) => addT(t, f), zeroT());
+    const before = Object.assign({}, prev); prev = addT(addT(zeroT(), prev), pageT);
+    const tr = rows.map(f => `<tr class="r"><td>${fmtDateHe(f.date)}</td><td>${esc(f.dep || '')}</td><td>${esc(f.depT || '')}</td>
+      <td>${esc(f.arr || '')}${f.via && f.via.length ? `<small>via ${esc(f.via.join(', '))}</small>` : ''}</td><td>${esc(f.arrT || '')}</td>
+      <td>${d(f.spSE)}</td><td>${d(f.spME)}</td><td>${d(f.mp)}</td><td><b>${d(f.total)}</b></td>
+      <td class="tl">${esc(f.picName || '')}</td><td>${n(f.ldgD)}</td><td>${n(f.ldgN)}</td><td>${d(f.night)}</td><td>${d(f.ifr)}</td>
+      <td>${d(f.pic)}</td><td>${d(f.cop)}</td><td>${d(f.dual)}</td><td>${d(f.instr)}</td>
+      <td class="tl rm"><span>${esc([f.acType, f.reg].filter(Boolean).join(' '))}</span>${f.remarks ? ' · ' + esc(f.remarks) : ''}</td></tr>`).join('')
+      + '<tr class="r"><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>'.repeat(PDF_ROWS - rows.length);
+    return `<section class="pp">${head(i + 2)}
+      <table class="lb">
+        <colgroup><col style="width:6.2%"><col style="width:4.6%"><col style="width:3.6%"><col style="width:5.4%"><col style="width:3.6%"><col style="width:3.4%"><col style="width:3.4%"><col style="width:3.6%"><col style="width:3.8%"><col style="width:7.5%"><col style="width:3%"><col style="width:3%"><col style="width:3.4%"><col style="width:3.4%"><col style="width:3.6%"><col style="width:3.6%"><col style="width:3.6%"><col style="width:3.6%"><col></colgroup>
+        <thead>
+          <tr class="no"><th>1</th><th colspan="2">2</th><th colspan="2">3</th><th colspan="2">5</th><th>6</th><th>7</th><th>8</th><th colspan="2">9</th><th colspan="2">10</th><th colspan="4">11</th><th>4 · 13</th></tr>
+          <tr><th rowspan="2">DATE<small>תאריך</small></th><th colspan="2">DEPARTURE<small>המראה</small></th><th colspan="2">ARRIVAL<small>נחיתה</small></th>
+            <th colspan="2">SINGLE PILOT<small>טייס יחיד</small></th><th rowspan="2">MULTI PILOT<small>רב-טייסים</small></th><th rowspan="2">TOTAL TIME<small>זמן כולל</small></th>
+            <th rowspan="2">NAME OF PIC<small>טייס מפקד</small></th><th colspan="2">LANDINGS<small>נחיתות</small></th><th colspan="2">CONDITION<small>תנאי הטסה</small></th>
+            <th colspan="4">PILOT FUNCTION TIME<small>זמן לפי תפקיד</small></th><th rowspan="2">AIRCRAFT · REMARKS<small>כלי טיס · הערות</small></th></tr>
+          <tr><th>PLACE</th><th>TIME</th><th>PLACE</th><th>TIME</th><th>SE</th><th>ME</th><th>DAY<small>יום</small></th><th>NIGHT<small>לילה</small></th><th>NIGHT<small>לילה</small></th><th>IFR</th>
+            <th>PIC</th><th>CO-PILOT<small>משנה</small></th><th>DUAL<small>בהדרכה</small></th><th>INSTR.<small>מדריך</small></th></tr>
+        </thead>
+        <tbody>${tr}</tbody>
+        <tfoot>${totRow('TOTAL THIS PAGE', 'סה"כ עמוד זה', pageT, 't1')}${totRow('TOTAL FROM PREVIOUS PAGES', 'מעמודים קודמים', before, 't2')}${totRow('TOTAL TIME', 'סה"כ מצטבר', prev, 't3')}</tfoot>
+      </table>
+      <div class="pp-sign"><span>I certify that the entries in this log are true. · אני מאשר כי הרישומים בעמוד זה נכונים.</span><span>Pilot's signature · חתימת הטייס: ____________________</span></div>
+    </section>`;
+  }).join('');
+  $('#printArea').innerHTML = cover + body;
+  toast('בחלון ההדפסה בחר "שמירה כ-PDF" כיעד', 5000);
+  setTimeout(() => window.print(), 300);
+}
+window.addEventListener('afterprint', () => { $('#printArea').innerHTML = ''; });
+$('#exPdf').addEventListener('click', exportPdf);
+$('#exPdf2').addEventListener('click', exportPdf);
 
 /* ----- export / backup ----- */
 function downloadFile(filename, data, type){
