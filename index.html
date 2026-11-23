@@ -227,7 +227,7 @@ tfoot td{font-weight:700;background:var(--bg)}
 </head>
 <body>
 <header class="top"><div class="wrap">
-  <div class="brand"><h1>לוגבוק טיסות</h1><small>גרסה 1.8 · 23.11.2026</small></div>
+  <div class="brand"><h1>לוגבוק טיסות</h1><small>גרסה 1.9 · 23.11.2026</small></div>
   <button type="button" class="status" id="status" data-s="loading">טוען…</button>
 </div></header>
 <nav class="tabs" aria-label="תפריט"><div class="wrap">
@@ -1123,7 +1123,11 @@ function fillFlightForm(){
   $('#fl-delete').hidden = !f;
   renderAcSelect(f ? f.acId : defaultAircraftId());
   fx('date').value = f ? f.date : todayISO();
-  fx('dep').value = f ? f.dep || '' : ''; fx('arr').value = f ? f.arr || '' : '';
+  /* a new flight starts from the places of the last flight saved (or, after an import, the latest flight) */
+  const latest = [...S.flights].sort((a, b) => (b.date + (b.depT || '')).localeCompare(a.date + (a.depT || '')))[0];
+  const lastDep = S.settings.lastDep != null ? S.settings.lastDep : (latest ? latest.dep || '' : '');
+  const lastArr = S.settings.lastArr != null ? S.settings.lastArr : (latest ? latest.arr || '' : '');
+  fx('dep').value = f ? f.dep || '' : lastDep; fx('arr').value = f ? f.arr || '' : lastArr;
   fx('depT').value = f ? f.depT || '' : ''; fx('arrT').value = f ? f.arrT || '' : '';
   $('#viaList').innerHTML = '';
   for (const v of (f && f.via) || []) addVia(v);
@@ -1285,11 +1289,11 @@ $('#flightForm').addEventListener('submit', e => {
   const keys = [monthKey(date)];
   if (old){ keys.push(monthKey(old.date)); S.flights = S.flights.map(x => x.id === old.id ? f : x); }
   else S.flights.push(f);
-  S.settings = Object.assign({}, S.settings, {lastAircraftId: acId, lastFunc: fx('func').value});
+  S.settings = Object.assign({}, S.settings, {lastAircraftId: acId, lastFunc: fx('func').value, lastDep: f.dep, lastArr: f.arr});
   persist([...keys, 'settings']);
   toast(old ? 'הטיסה עודכנה' : 'הטיסה נשמרה');
   S.editId = null;
-  if (old) location.hash = 'logbook'; else fillFlightForm();
+  location.hash = 'logbook';
 });
 
 /* ----- aircraft ----- */
